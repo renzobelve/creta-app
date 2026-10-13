@@ -6,7 +6,8 @@
 <meta name="theme-color" content="#85200C">
 <meta name="apple-mobile-web-app-title" content="Creta">
 <meta name="robots" content="noindex">
-<title>Carga Creta</title>
+<link rel="apple-touch-icon" href="logo.png">
+<title>CRETA App de Movimientos</title>
 <style>
   :root {
     --bordo: #85200C;
@@ -27,29 +28,36 @@
     margin: 0; background: var(--crema); color: var(--tinta);
     font: 16px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   }
-  header { background: var(--bordo); color: #fff; padding: 14px 16px; }
-  .cab { max-width: 560px; margin: 0 auto; display: flex; align-items: baseline; gap: 10px; }
+  header { background: var(--bordo); color: #fff; padding: 12px 16px; }
+  .cab { max-width: 560px; margin: 0 auto; display: flex; align-items: center; gap: 10px; min-height: 32px; }
+  .logo { height: 32px; width: auto; display: block; }
   .marca { font-weight: 700; letter-spacing: .18em; font-size: 15px; }
-  .sub { font-size: 14px; opacity: .85; }
+  .sub { font-size: 15px; opacity: .9; }
   main { max-width: 560px; margin: 0 auto; padding: 16px 16px 140px; }
 
   .aviso { border-radius: 12px; padding: 12px 14px; margin-bottom: 14px; font-size: 15px; }
   .aviso.ok { background: var(--ok-fondo); border: 1px solid #C5DDB8; color: #24501A; }
-  .aviso.mal { background: #FBEAE8; border: 1px solid #EFC2BD; color: var(--error); }
   .aviso b { display: block; margin-bottom: 2px; }
 
-  .tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 14px; margin-bottom: 12px; }
-  .tipos { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .titulo-menu { display: block; font-weight: 600; font-size: 15px; margin: 2px 2px 10px; }
+  .intro { margin: 6px 0 0; color: var(--gris); font-size: 14px; }
+  .tipos { display: flex; flex-direction: column; gap: 10px; }
   .tipo {
-    min-height: 54px; padding: 8px 10px; border-radius: 12px; border: 1px solid var(--borde);
-    background: #fff; color: var(--tinta); font: inherit; font-size: 15px; text-align: left; line-height: 1.2;
+    width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
+    padding: 14px 16px; min-height: 64px; border-radius: 14px; border: 1px solid var(--linea);
+    background: #fff; color: var(--tinta); font: inherit;
   }
   .tipo:active { background: var(--crema); }
+  .tipo-texto { flex: 1; min-width: 0; }
+  .tipo-nombre { display: block; font-weight: 700; font-size: 17px; }
+  .tipo-desc { display: block; color: var(--gris); font-size: 13px; margin-top: 2px; }
+  .flecha { color: var(--bordo); font-size: 22px; line-height: 1; }
+
+  .tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 14px; margin-bottom: 12px; min-width: 0; }
   .elegido { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
   .elegido strong { font-size: 18px; }
-  .intro { margin: 6px 0 0; color: var(--gris); font-size: 14px; }
 
-  .campo { margin-bottom: 16px; }
+  .campo { margin-bottom: 16px; min-width: 0; }
   .campo:last-child { margin-bottom: 0; }
   .etq { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
   .opc { font-weight: 400; color: var(--gris); font-size: 13px; }
@@ -58,9 +66,13 @@
   .error:empty { display: none; }
 
   input, select, textarea {
-    width: 100%; font: inherit; font-size: 16px; color: inherit; background: #fff;
+    display: block; width: 100%; max-width: 100%; min-width: 0; font: inherit; font-size: 16px; color: inherit; background: #fff;
     padding: 11px 12px; min-height: 46px; border: 1px solid var(--borde); border-radius: 10px;
   }
+  /* En iOS el campo de fecha tiene un ancho propio que se sale de la tarjeta. */
+  input[type="date"] { -webkit-appearance: none; appearance: none; text-align: left; line-height: 22px; }
+  input[type="date"]::-webkit-date-and-time-value { text-align: left; margin: 0; }
+  input[type="date"]::-webkit-calendar-picker-indicator { margin: 0; }
   textarea { min-height: 70px; resize: vertical; }
   select {
     -webkit-appearance: none; appearance: none; padding-right: 36px;
@@ -71,6 +83,7 @@
   input:focus, select:focus, textarea:focus { outline: 2px solid var(--bordo); outline-offset: 1px; border-color: var(--bordo); }
   .mal input, .mal select, .mal textarea { border-color: var(--error); }
   [hidden] { display: none !important; }
+  .color-txt { margin-top: 8px; }
 
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip {
@@ -95,14 +108,26 @@
     background: transparent; color: var(--bordo); font: inherit; font-weight: 600;
   }
   .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .dos .campo { margin-bottom: 0; }
 
   .pasos { display: flex; gap: 8px; align-items: stretch; }
   .paso {
-    width: 52px; min-height: 46px; border-radius: 10px; border: 1px solid var(--borde);
+    width: 52px; flex: none; min-height: 46px; border-radius: 10px; border: 1px solid var(--borde);
     background: #fff; color: var(--bordo); font-size: 22px; line-height: 1;
   }
   .pasos input { text-align: center; max-width: 96px; }
+
+  .ventas { display: flex; flex-direction: column; gap: 8px; }
+  .venta {
+    display: flex; align-items: flex-start; gap: 12px; padding: 12px; border-radius: 12px;
+    border: 1px solid var(--borde); background: #fff; cursor: pointer;
+  }
+  .venta input { width: 22px; height: 22px; min-height: 0; flex: none; margin: 1px 0 0; accent-color: var(--bordo); }
+  .venta-texto { flex: 1; min-width: 0; }
+  .venta-cab { display: flex; justify-content: space-between; gap: 8px; font-weight: 600; }
+  .venta-det { display: block; color: var(--gris); font-size: 13px; margin-top: 2px; }
+  .venta:has(input:checked) { border-color: var(--bordo); background: #FFFCFB; }
+  .mal .venta { border-color: var(--error); }
+  .vacio { color: var(--gris); font-size: 15px; margin: 0; }
 
   .pie {
     position: fixed; left: 0; right: 0; bottom: 0; background: rgba(249, 241, 239, .97);
@@ -121,12 +146,17 @@
 </style>
 </head>
 <body>
-<header><div class="cab"><span class="marca">CRETA</span><span class="sub">Carga de movimientos</span></div></header>
+<header>
+  <div class="cab">
+    <img class="logo" src="logo.png" alt="" onerror="this.remove()">
+    <span class="marca">CRETA</span><span class="sub">App de Movimientos</span>
+  </div>
+</header>
 
 <main>
   <div id="aviso" hidden></div>
-  <section class="tarjeta" id="eleccion">
-    <span class="etq">¿Qué querés cargar?</span>
+  <section id="eleccion">
+    <span class="titulo-menu">¿Qué querés cargar?</span>
     <p class="intro" id="cargando">Cargando las listas…</p>
     <button type="button" class="enlace" id="reintentar" hidden>Reintentar</button>
     <div class="tipos" id="tipos"></div>
@@ -134,15 +164,11 @@
   <section class="tarjeta" id="elegido" hidden>
     <div class="elegido">
       <strong id="tipoTitulo"></strong>
-      <button type="button" class="enlace" id="cambiar">Cambiar</button>
+      <button type="button" class="enlace" id="volver">Volver</button>
     </div>
     <p class="intro" id="tipoIntro"></p>
   </section>
-  <div id="formulario" hidden>
-    <section class="tarjeta" id="comunes"></section>
-    <section class="tarjeta" id="campos"></section>
-    <section class="tarjeta" id="final"></section>
-  </div>
+  <div id="formulario" hidden></div>
 </main>
 
 <footer class="pie" id="pie" hidden>
@@ -216,7 +242,11 @@ function pesos(n) {
   const dec = n % 1 ? 2 : 0;
   return n.toLocaleString('es-AR', { style: 'currency', currency: 'ARS', minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
+function aTexto(n) { return String(Math.round(n * 100) / 100).replace('.', ','); }
 function plural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+function lista(items) {
+  return items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + ' y ' + items[items.length - 1];
+}
 function nuevoCodigo() {
   const a = new Uint8Array(10);
   if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
@@ -226,6 +256,15 @@ function nuevoCodigo() {
 function coloresDeTela(tela) {
   const fuentes = tela === 'Tusor' ? ['Tusor', 'Tusor Liso', 'Tusor Estampado'] : [tela];
   return unicos([].concat.apply([], fuentes.map(function (t) { return D.colores[t] || []; })));
+}
+// Los colores de un producto: los de su tela y, en los estampados, solo los de su diseño
+// ("Amsterdam Arena" para un producto Amsterdam). null si no lleva lista (tela Varias).
+function coloresProducto(p) {
+  if (p.t === 'Varias') return null;
+  const todos = coloresDeTela(p.t);
+  const palabras = p.n.split(' ');
+  const suyos = todos.filter(function (c) { return palabras.indexOf(c.split(' ')[0]) > -1; });
+  return suyos.length ? suyos : todos;
 }
 function llenar(sel, primera, opciones) {
   sel.textContent = '';
@@ -301,13 +340,16 @@ function plata(nombre, etiqueta, o) {
   const input = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', enterkeyhint: 'next' });
   const vista = h('p', { class: 'vista' });
   const m = marco(etiqueta, h('div', { class: 'monto' }, h('span', { class: 'pre' }, '$'), input), Object.assign({ extra: vista }, o));
+  function mostrar() { vista.textContent = input.value.trim() && !errPlata(input.value, false) ? pesos(numero(input.value)) : ''; }
   input.addEventListener('input', function () {
     m.error('');
-    vista.textContent = input.value.trim() && !errPlata(input.value, false) ? pesos(numero(input.value)) : '';
+    mostrar();
+    if (o.alEscribir) o.alEscribir(input.value);
   });
   return {
     nombre: nombre, nodo: m.nodo, error: m.error,
     valor: function () { return input.value.trim(); },
+    poner: function (v) { input.value = v; mostrar(); m.error(''); },
     validar: function () { return m.error(errPlata(input.value, !o.opcional)); },
   };
 }
@@ -315,12 +357,12 @@ function plata(nombre, etiqueta, o) {
 function texto(nombre, etiqueta, o) {
   o = o || {};
   const input = h('input', { type: 'text', autocomplete: 'off', maxlength: o.largo || 120, placeholder: o.placeholder, enterkeyhint: 'next' });
-  let lista = null;
+  let datalist = null;
   if (o.sugerencias && o.sugerencias.length) {
-    lista = h('datalist', { id: 'dl' + (++ids) }, o.sugerencias.map(function (s) { return h('option', { value: s }); }));
-    input.setAttribute('list', lista.id);
+    datalist = h('datalist', { id: 'dl' + (++ids) }, o.sugerencias.map(function (s) { return h('option', { value: s }); }));
+    input.setAttribute('list', datalist.id);
   }
-  const m = marco(etiqueta, input, Object.assign({ extra: lista }, o));
+  const m = marco(etiqueta, input, Object.assign({ extra: datalist }, o));
   input.addEventListener('input', function () { m.error(''); });
   return {
     nombre: nombre, nodo: m.nodo, error: m.error,
@@ -375,26 +417,28 @@ function duracion() {
   };
 }
 
-// Un color de la lista de la tela, u «Otro» para escribirlo. Sin lista, se escribe.
+// El color: un desplegable con la lista que corresponde, más «Otro» para escribir uno nuevo.
+// Sin lista (tela Varias, o una tela sin colores cargados), se escribe.
 function color() {
   const sel = h('select', {});
-  const txt = h('input', { type: 'text', autocomplete: 'off', maxlength: 80 });
-  const caja = h('div', {}, sel, txt);
-  const m = marco('Color', caja, { grupo: true });
+  const txt = h('input', { type: 'text', autocomplete: 'off', maxlength: 80, class: 'color-txt' });
+  const m = marco('Color', h('div', {}, sel, txt), { grupo: true });
   let modo = 'nada';
-  function poner(lista, placeholder) {
+  // lista: undefined = falta elegir; null o [] = se escribe; con elementos = desplegable.
+  function poner(lista, aviso) {
     txt.value = '';
     m.error('');
-    if (lista === null) {
-      modo = 'nada'; sel.hidden = true; txt.hidden = false; txt.disabled = true;
-      txt.placeholder = 'Primero elegí el producto';
-    } else if (lista.length) {
+    if (lista === undefined) {
+      modo = 'nada'; llenar(sel, aviso || 'Primero elegí el producto', []);
+      sel.disabled = true; sel.hidden = false; txt.hidden = true;
+    } else if (lista && lista.length) {
       modo = 'lista'; llenar(sel, 'Elegí el color', lista.concat([[OTRO, 'Otro: escribirlo']]));
-      sel.hidden = false; txt.hidden = true; txt.disabled = false; txt.placeholder = 'Escribí el color';
+      sel.disabled = false; sel.hidden = false; txt.hidden = true; txt.placeholder = 'Escribí el color';
     } else {
-      modo = 'texto'; sel.hidden = true; txt.hidden = false; txt.disabled = false;
-      txt.placeholder = placeholder || 'Escribí el color';
+      modo = 'texto'; sel.hidden = true; txt.hidden = false; txt.classList.remove('color-txt');
+      txt.placeholder = aviso || 'Escribí el color';
     }
+    if (modo !== 'texto') txt.classList.add('color-txt');
   }
   sel.addEventListener('change', function () {
     m.error('');
@@ -402,12 +446,16 @@ function color() {
     if (!txt.hidden) txt.focus();
   });
   txt.addEventListener('input', function () { m.error(''); });
-  poner(null);
+  poner(undefined);
   const valor = function () { return modo === 'lista' && sel.value !== OTRO ? sel.value : txt.value.trim(); };
   return {
     nodo: m.nodo, poner: poner, valor: valor, error: m.error,
     mostrar: function (si) { m.nodo.hidden = !si; },
-    validar: function () { return m.error(m.nodo.hidden || modo === 'nada' || valor() ? '' : 'Falta el color.'); },
+    validar: function () {
+      if (m.nodo.hidden) return m.error('');
+      if (modo === 'nada') return m.error('');
+      return m.error(valor() ? '' : 'Falta el color.');
+    },
   };
 }
 
@@ -427,7 +475,8 @@ function lineaProducto() {
   const elegido = function () { return D.productos.filter(function (p) { return p.n === prod.value; })[0]; };
   const alProducto = function () {
     const p = elegido();
-    col.poner(p ? (p.t === 'Varias' ? [] : coloresDeTela(p.t)) : null, p && p.t === 'Varias' ? 'Colores o contenido' : '');
+    if (!p) return col.poner(undefined);
+    col.poner(coloresProducto(p), p.t === 'Varias' ? 'Colores o contenido' : '');
   };
   cat.addEventListener('change', function () {
     const lista = D.productos.filter(function (p) { return p.c === cat.value; }).map(function (p) { return p.n; });
@@ -468,7 +517,7 @@ function lineaInsumo() {
   const alInsumo = function () {
     const i = elegido();
     col.mostrar(!!(i && i.l));
-    col.poner(i && i.l ? (D.colores[i.l] || []) : null);
+    col.poner(i && i.l ? (D.colores[i.l] || []) : undefined);
     fq.ayuda(i ? (i.u === 'Metros' ? 'En metros.' : 'En unidades.') : '');
   };
   tipo.addEventListener('change', function () {
@@ -523,21 +572,57 @@ function lineas(nombre, etiqueta, fabrica, cada, textoAgregar) {
   };
 }
 
+// Las ventas cargadas con «Todavía no la cobré» que ningún cobro cubre todavía, para tildar.
+function ventasPendientes(alCambiar) {
+  const pend = D.pendientes || [];
+  const elegidas = {};
+  const caja = h('div', { class: 'ventas' });
+  if (!pend.length) caja.append(h('p', { class: 'vacio' }, 'No hay ventas sin cobrar.'));
+  pend.forEach(function (v) {
+    const chk = h('input', { type: 'checkbox', value: String(v.id) });
+    chk.addEventListener('change', function () {
+      if (chk.checked) elegidas[v.id] = v; else delete elegidas[v.id];
+      m.error('');
+      alCambiar(suma());
+    });
+    caja.append(h('label', { class: 'venta' }, chk,
+      h('span', { class: 'venta-texto' },
+        h('span', { class: 'venta-cab' }, h('span', {}, 'Venta ' + v.id + ' · ' + v.fecha + (v.canal ? ' · ' + v.canal : '')), h('span', {}, pesos(v.neto))),
+        h('span', { class: 'venta-det' }, v.detalle || 'Sin productos'))));
+  });
+  const m = marco('Ventas que cobra', caja, { grupo: true, ayuda: pend.length ? 'Tildá las ventas que cubre este cobro.' : '' });
+  function suma() { return Object.keys(elegidas).reduce(function (s, id) { return s + elegidas[id].neto; }, 0); }
+  return {
+    nombre: 'ventas', nodo: m.nodo, error: m.error,
+    valor: function () { return Object.keys(elegidas).map(Number).sort(function (a, b) { return a - b; }); },
+    validar: function () {
+      if (!pend.length) return m.error('No hay ventas sin cobrar para elegir.');
+      return m.error(Object.keys(elegidas).length ? '' : 'Elegí al menos una venta.');
+    },
+  };
+}
+
 // ---------- Tipos de carga ----------
+// grupos() devuelve los campos agrupados: cada grupo va en su tarjeta.
 
 const TIPOS = {
-  'Venta': {
+  venta: {
+    desc: 'Un pedido, con sus productos y lo que cobraste.',
     intro: 'Una carga por pedido.',
-    campos: function () {
+    grupos: function () {
       return [
-        chips('canal', 'Canal', L.canales),
-        lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto'),
-        plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó. En Cler, lo que le pagó a Cler.' }),
-        plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
-        plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
-        chips('formaPago', 'Forma de pago', L.cuentas.concat([L.pendiente]), { ayuda: 'Dónde entró la plata.' }),
-        texto('cliente', 'Cliente', { opcional: true, ayuda: 'Nombre, para la postventa.' }),
-        chips('origen', 'Origen', L.origenes, { opcional: true, ayuda: '¿Cómo llegó el cliente?' }),
+        [chips('canal', 'Canal', L.canales)],
+        [lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto')],
+        [
+          plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó. En Cler, lo que le pagó a Cler.' }),
+          plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
+          plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
+          chips('formaPago', 'Forma de pago', L.cuentas.concat([L.pendiente]), { ayuda: 'Dónde entró la plata.' }),
+        ],
+        [
+          texto('cliente', 'Cliente', { opcional: true, ayuda: 'Nombre, para la postventa.' }),
+          chips('origen', 'Origen', L.origenes, { opcional: true, ayuda: '¿Cómo llegó el cliente?' }),
+        ],
       ];
     },
     cruzar: function (v) {
@@ -547,25 +632,38 @@ const TIPOS = {
     },
     resumen: function (v) { return v.canal + ' · ' + plural(v.lineas.length, 'producto', 'productos') + ' · ' + pesos(numero(v.montoBruto)); },
   },
-  'Cobro de venta pendiente': {
-    intro: 'Para las liquidaciones de Cler y las ventas cargadas como «Todavía no la cobré». En Notas, qué pedidos cubre.',
-    campos: function () {
+  cobro: {
+    desc: 'La plata de una venta que cargaste sin cobrar.',
+    intro: 'Para las ventas cargadas como «Todavía no la cobré», también las de Cler.',
+    grupos: function () {
+      let automatico = true;
+      const monto = plata('montoNeto', 'Monto cobrado', {
+        ayuda: 'Se completa con lo que suman las ventas elegidas. Si te pagaron otro monto, corregilo y anotá por qué en Notas.',
+        alEscribir: function () { automatico = false; },
+      });
+      const ventas = ventasPendientes(function (total) {
+        if (automatico) monto.poner(total ? aTexto(total) : '');
+      });
       return [
-        chips('canal', 'Canal de la venta', L.canales),
-        plata('montoNeto', 'Monto'),
-        chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'Dónde entró la plata.' }),
+        [ventas],
+        [monto, chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'Dónde entró la plata.' })],
       ];
     },
-    resumen: function (v) { return v.canal + ' · ' + pesos(numero(v.montoNeto)); },
+    resumen: function (v) {
+      return (v.ventas.length === 1 ? 'Venta ' : 'Ventas ') + lista(v.ventas.map(String)) + ' · ' + pesos(numero(v.montoNeto));
+    },
   },
-  'Compra de insumos': {
+  compra: {
+    desc: 'Tela, relleno, avíos y packaging.',
     intro: 'Una carga por compra. El envío va una sola vez, al final.',
-    campos: function () {
+    grupos: function () {
       return [
-        texto('proveedor', 'Proveedor', { sugerencias: D.proveedores }),
-        lineas('lineas', 'Insumos', lineaInsumo, 'Insumo', 'Agregar otro insumo'),
-        plata('envio', 'Envío de la compra', { opcional: true, ayuda: 'Lo que cobró el proveedor por mandarla. Vacío si la retiraste.' }),
-        chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'De dónde salió la plata.' }),
+        [texto('proveedor', 'Proveedor', { sugerencias: D.proveedores })],
+        [lineas('lineas', 'Insumos', lineaInsumo, 'Insumo', 'Agregar otro insumo')],
+        [
+          plata('envio', 'Envío de la compra', { opcional: true, ayuda: 'Lo que cobró el proveedor por mandarla. Vacío si la retiraste.' }),
+          chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'De dónde salió la plata.' }),
+        ],
       ];
     },
     resumen: function (v) {
@@ -573,24 +671,30 @@ const TIPOS = {
       return v.proveedor + ' · ' + plural(v.lineas.length, 'insumo', 'insumos') + ' · ' + pesos(total);
     },
   },
-  'Gasto': {
-    intro: 'Todo lo que no es insumo: envíos sueltos, plataformas, publicidad, impuestos, equipos.',
-    campos: function () {
+  gasto: {
+    desc: 'Plataformas, publicidad, impuestos y equipos.',
+    intro: 'Todo lo que no es insumo. Los envíos van en su venta o en su compra.',
+    grupos: function () {
       return [
-        chips('categoria', 'Categoría', L.categoriasGasto),
-        texto('detalle', 'Detalle', { ayuda: 'Por ejemplo: Tiendanube octubre.', largo: 200 }),
-        plata('montoNeto', 'Monto'),
-        chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'De dónde salió la plata.' }),
+        [
+          chips('categoria', 'Categoría', L.categoriasGasto),
+          texto('detalle', 'Detalle', { ayuda: 'Por ejemplo: Tiendanube octubre.', largo: 200 }),
+        ],
+        [
+          plata('montoNeto', 'Monto'),
+          chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'De dónde salió la plata.' }),
+        ],
       ];
     },
     resumen: function (v) { return v.categoria + ' · ' + pesos(numero(v.montoNeto)); },
   },
-  'Producción o ajuste de stock': {
+  ajuste: {
+    desc: 'Lo que producís y lo que entra o sale del stock sin venderse.',
     intro: 'Lo que entra o sale del stock de productos terminados sin ser una venta.',
-    campos: function () {
+    grupos: function () {
       return [
-        chips('motivo', 'Motivo', L.motivos),
-        lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto'),
+        [chips('motivo', 'Motivo', L.motivos)],
+        [lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto')],
       ];
     },
     resumen: function (v) {
@@ -598,27 +702,29 @@ const TIPOS = {
       return v.motivo + ' · ' + plural(n, 'unidad', 'unidades');
     },
   },
-  'Horas': {
+  horas: {
+    desc: 'Una sesión de trabajo.',
     intro: 'Una carga por sesión de trabajo.',
-    campos: function () {
-      return [
+    grupos: function () {
+      return [[
         chips('tarea', 'Tarea', L.tareas, { alCambiar: function (t, m) { m.ayuda(L.ayudaTareas[t] || ''); } }),
         duracion(),
-      ];
+      ]];
     },
     resumen: function (v) {
       const t = Number(v.horas || 0) * 60 + Number(v.minutos || 0);
       return v.tarea + ' · ' + (t >= 60 ? Math.floor(t / 60) + ' h ' : '') + (t % 60 ? (t % 60) + ' min' : '');
     },
   },
-  'Movimiento de dinero': {
+  dinero: {
+    desc: 'Plata tuya que entra o sale, y pases entre cuentas.',
     intro: 'Retiros para vos, aportes de plata tuya y pases entre cuentas.',
-    campos: function () {
-      return [
+    grupos: function () {
+      return [[
         chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio.' }),
         chips('hacia', 'Hacia', L.cuentas.concat([L.retiro]), { ayuda: 'Retiro: plata del negocio que sacás para vos.' }),
         plata('montoNeto', 'Monto'),
-      ];
+      ]];
     },
     cruzar: function (v) {
       if (v.desde && v.desde === v.hacia) return ['hacia', 'Desde y Hacia no pueden ser la misma cuenta.'];
@@ -637,35 +743,37 @@ let comunes = {};
 let codigo = nuevoCodigo();
 let ocupado = false;
 
-function cargarListas() {
-  $('cargando').hidden = false;
-  $('cargando').textContent = 'Cargando las listas…';
-  $('reintentar').hidden = true;
+// Lee las listas de la planilla. En silencio, después de guardar, para que las ventas sin cobrar estén al día.
+function cargarListas(silencio) {
+  if (!silencio) {
+    $('cargando').hidden = false;
+    $('cargando').textContent = 'Cargando las listas…';
+    $('reintentar').hidden = true;
+  }
   if (!CLAVE) {
     $('cargando').textContent = 'Abrí la página con el link completo que te pasó Renzo.';
-    return;
+    return Promise.resolve();
   }
-  pedir('GET', API + '?clave=' + encodeURIComponent(CLAVE))
+  return pedir('GET', API + '?clave=' + encodeURIComponent(CLAVE))
     .then(function (r) {
       D = r;
       L = r.listas;
       $('cargando').hidden = true;
-      $('tipos').replaceChildren.apply($('tipos'), L.tipos.map(function (t) {
-        return h('button', { type: 'button', class: 'tipo', onclick: function () { elegir(t); } }, t);
+      $('tipos').replaceChildren.apply($('tipos'), L.tipos.filter(function (t) { return TIPOS[t.codigo]; }).map(function (t) {
+        return h('button', { type: 'button', class: 'tipo', onclick: function () { elegir(t); } },
+          h('span', { class: 'tipo-texto' }, h('span', { class: 'tipo-nombre' }, t.nombre), h('span', { class: 'tipo-desc' }, TIPOS[t.codigo].desc)),
+          h('span', { class: 'flecha', 'aria-hidden': 'true' }, '›'));
       }));
     })
     .catch(function (e) {
+      if (silencio) return;
       $('cargando').textContent = e.red ? 'No pude leer la planilla: revisá la conexión.' : e.message;
       $('reintentar').hidden = !e.red;
     });
 }
-$('reintentar').addEventListener('click', cargarListas);
-cargarListas();
-$('cambiar').addEventListener('click', function () {
-  $('eleccion').hidden = false; $('elegido').hidden = true; $('formulario').hidden = true; $('pie').hidden = true;
-  aviso('');
-  window.scrollTo(0, 0);
-});
+$('reintentar').addEventListener('click', function () { cargarListas(false); });
+cargarListas(false);
+$('volver').addEventListener('click', function () { menu(); aviso(''); });
 $('guardar').addEventListener('click', guardar);
 // El aviso de abajo se borra apenas se toca algo del formulario.
 ['input', 'change'].forEach(function (ev) {
@@ -675,35 +783,40 @@ $('formulario').addEventListener('click', function (e) {
   if (!ocupado && e.target.closest('.chip, .paso')) $('estado').textContent = '';
 });
 
+function menu() {
+  tipo = '';
+  $('eleccion').hidden = false; $('elegido').hidden = true; $('formulario').hidden = true; $('pie').hidden = true;
+  $('formulario').replaceChildren();
+  $('estado').textContent = '';
+  window.scrollTo(0, 0);
+}
+
 function elegir(t) {
-  tipo = t;
-  $('tipoTitulo').textContent = t;
-  $('tipoIntro').textContent = TIPOS[t].intro;
+  tipo = t.codigo;
+  $('tipoTitulo').textContent = t.nombre;
+  $('tipoIntro').textContent = TIPOS[tipo].intro;
   $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = false; $('pie').hidden = false;
-  armar(true);
+  armar();
   aviso('');
   window.scrollTo(0, 0);
 }
 
-// Arma los campos del tipo. Fecha y notas se conservan al cambiar de tipo, salvo después de guardar.
-function armar(conservar) {
-  const antes = conservar && comunes.fecha ? { fecha: comunes.fecha.valor(), notas: comunes.notas.valor() } : null;
+// Arma el formulario del tipo: la fecha, una tarjeta por grupo y las notas.
+function armar() {
   comunes = { fecha: fecha(), notas: notas() };
-  $('comunes').replaceChildren(comunes.fecha.nodo);
-  $('final').replaceChildren(comunes.notas.nodo);
-  if (antes) {
-    comunes.fecha.nodo.querySelector('input').value = antes.fecha;
-    comunes.notas.nodo.querySelector('textarea').value = antes.notas;
-  }
-  campos = TIPOS[tipo].campos();
-  $('campos').replaceChildren.apply($('campos'), campos.map(function (c) { return c.nodo; }));
+  const grupos = TIPOS[tipo].grupos();
+  campos = [].concat.apply([], grupos);
+  const tarjetas = [h('section', { class: 'tarjeta' }, comunes.fecha.nodo)]
+    .concat(grupos.map(function (g) { return h('section', { class: 'tarjeta' }, g.map(function (c) { return c.nodo; })); }))
+    .concat([h('section', { class: 'tarjeta' }, comunes.notas.nodo)]);
+  $('formulario').replaceChildren.apply($('formulario'), tarjetas);
   $('estado').textContent = '';
 }
 
-function aviso(titulo, detalle, clase) {
+function aviso(titulo, detalle) {
   const a = $('aviso');
   a.hidden = !titulo;
-  a.className = 'aviso ' + (clase || 'ok');
+  a.className = 'aviso ok';
   a.replaceChildren(h('b', {}, titulo || ''), detalle || '');
 }
 
@@ -723,9 +836,9 @@ function guardar() {
     c.error(cruce[1]);
     errores.push(cruce[1]);
   }
-  const primero = document.querySelector('.campo.mal');
   if (errores.some(String)) {
     $('estado').textContent = 'Falta completar o corregir lo marcado.';
+    const primero = document.querySelector('.campo.mal');
     if (primero) primero.scrollIntoView({ block: 'center', behavior: 'smooth' });
     return;
   }
@@ -733,15 +846,16 @@ function guardar() {
   $('guardar').disabled = true;
   $('guardar').textContent = 'Guardando…';
   $('estado').textContent = '';
+  const nombre = $('tipoTitulo').textContent;
   pedir('POST', API, { clave: CLAVE, carga: v })
     .then(function (r) {
       liberar();
-      const detalle = TIPOS[tipo].resumen(v);
+      const detalle = nombre + ' · ' + TIPOS[tipo].resumen(v);
+      codigo = nuevoCodigo();
+      menu();
       aviso(r.repetida ? 'Ya estaba guardada (carga ' + r.id + ')' : 'Listo, quedó guardada (carga ' + r.id + ')',
         r.repetida ? detalle + '. No se cargó dos veces.' : detalle);
-      codigo = nuevoCodigo();
-      armar(false);
-      window.scrollTo(0, 0);
+      cargarListas(true);
     })
     .catch(function (e) {
       liberar();
