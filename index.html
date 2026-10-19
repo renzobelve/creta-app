@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#85200C">
 <meta name="apple-mobile-web-app-title" content="Creta">
 <meta name="robots" content="noindex">
-<link rel="apple-touch-icon" href="logo.png">
+<link rel="apple-touch-icon" href="icono.png">
 <title>CRETA App de Movimientos</title>
 <style>
   :root {
@@ -59,6 +59,8 @@
 
   .campo { margin-bottom: 16px; min-width: 0; }
   .campo:last-child { margin-bottom: 0; }
+  /* El último campo visible de una tarjeta, aunque lo sigan campos ocultos (la seña de una venta). */
+  .campo:has(~ .campo[hidden]):not(:has(~ .campo:not([hidden]))) { margin-bottom: 0; }
   .etq { display: block; font-weight: 600; font-size: 15px; margin-bottom: 6px; }
   .opc { font-weight: 400; color: var(--gris); font-size: 13px; }
   .ayuda { margin: 6px 0 0; color: var(--gris); font-size: 13px; }
@@ -322,16 +324,19 @@ function chips(nombre, etiqueta, opciones, o) {
     return h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', onclick: function () { elegir(op); } }, op);
   });
   const m = marco(etiqueta, h('div', { class: 'chips', role: 'group' }, botones), Object.assign({ grupo: true }, o));
+  function marcar() { botones.forEach(function (b, i) { b.setAttribute('aria-pressed', String(opciones[i] === elegido)); }); }
   function elegir(op) {
     elegido = elegido === op && o.opcional ? '' : op;
-    botones.forEach(function (b, i) { b.setAttribute('aria-pressed', String(opciones[i] === elegido)); });
+    marcar();
     m.error('');
     if (o.alCambiar) o.alCambiar(elegido, m);
   }
+  // Un campo oculto no se valida ni se manda; al ocultarlo se borra lo elegido.
   return {
     nombre: nombre, nodo: m.nodo, error: m.error,
-    valor: function () { return elegido; },
-    validar: function () { return m.error(!elegido && !o.opcional ? 'Elegí una opción.' : ''); },
+    valor: function () { return m.nodo.hidden ? '' : elegido; },
+    validar: function () { return m.error(!m.nodo.hidden && !elegido && !o.opcional ? 'Elegí una opción.' : ''); },
+    mostrar: function (si) { m.nodo.hidden = !si; if (!si) { elegido = ''; marcar(); m.error(''); } },
   };
 }
 
@@ -340,17 +345,37 @@ function plata(nombre, etiqueta, o) {
   const input = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off', enterkeyhint: 'next' });
   const vista = h('p', { class: 'vista' });
   const m = marco(etiqueta, h('div', { class: 'monto' }, h('span', { class: 'pre' }, '$'), input), Object.assign({ extra: vista }, o));
-  function mostrar() { vista.textContent = input.value.trim() && !errPlata(input.value, false) ? pesos(numero(input.value)) : ''; }
+  function verVista() { vista.textContent = input.value.trim() && !errPlata(input.value, false) ? pesos(numero(input.value)) : ''; }
   input.addEventListener('input', function () {
     m.error('');
-    mostrar();
+    verVista();
     if (o.alEscribir) o.alEscribir(input.value);
   });
+  // Un campo oculto no se valida ni se manda; al ocultarlo se vacía.
   return {
-    nombre: nombre, nodo: m.nodo, error: m.error,
-    valor: function () { return input.value.trim(); },
-    poner: function (v) { input.value = v; mostrar(); m.error(''); },
-    validar: function () { return m.error(errPlata(input.value, !o.opcional)); },
+    nombre: nombre, nodo: m.nodo, error: m.error, ayuda: m.ayuda,
+    valor: function () { return m.nodo.hidden ? '' : input.value.trim(); },
+    poner: function (v) { input.value = v; verVista(); m.error(''); },
+    validar: function () { return m.error(m.nodo.hidden ? '' : errPlata(input.value, !o.opcional)); },
+    mostrar: function (si) { m.nodo.hidden = !si; if (!si) { input.value = ''; verVista(); m.error(''); } },
+  };
+}
+
+// Una casilla para tildar, con su explicación abajo. alCambiar(tildada) avisa cada cambio, también al ocultarla.
+function casilla(nombre, etiqueta, detalle, alCambiar) {
+  const chk = h('input', { type: 'checkbox' });
+  const nodo = h('div', { class: 'campo' },
+    h('label', { class: 'venta' }, chk,
+      h('span', { class: 'venta-texto' }, h('span', { class: 'venta-cab' }, etiqueta), h('span', { class: 'venta-det' }, detalle))));
+  chk.addEventListener('change', function () { alCambiar(chk.checked); });
+  return {
+    nombre: nombre, nodo: nodo, error: function () { return ''; },
+    valor: function () { return !nodo.hidden && chk.checked; },
+    validar: function () { return ''; },
+    mostrar: function (si) {
+      nodo.hidden = !si;
+      if (!si && chk.checked) { chk.checked = false; alCambiar(false); }
+    },
   };
 }
 
@@ -572,7 +597,11 @@ function lineas(nombre, etiqueta, fabrica, cada, textoAgregar) {
   };
 }
 
-// Las ventas cargadas con «Todavía no la cobré» que ningún cobro cubre todavía, para tildar.
+// Lo que falta cobrar de una venta: el neto menos sus pagos parciales.
+function saldo(v) { return v.saldo === undefined ? v.neto : v.saldo; }
+
+// Las ventas cargadas con «Todavía no la cobré» que ningún cobro completo cubre todavía, para tildar.
+// alCambiar(lo que falta cobrar de las elegidas, cuántas son).
 function ventasPendientes(alCambiar) {
   const pend = D.pendientes || [];
   const elegidas = {};
@@ -583,15 +612,16 @@ function ventasPendientes(alCambiar) {
     chk.addEventListener('change', function () {
       if (chk.checked) elegidas[v.id] = v; else delete elegidas[v.id];
       m.error('');
-      alCambiar(suma());
+      alCambiar(suma(), Object.keys(elegidas).length);
     });
+    const yaCobrado = v.cobrado ? 'Cobraste ' + pesos(v.cobrado) + ' de ' + pesos(v.neto) + '. ' : '';
     caja.append(h('label', { class: 'venta' }, chk,
       h('span', { class: 'venta-texto' },
-        h('span', { class: 'venta-cab' }, h('span', {}, 'Venta ' + v.id + ' · ' + v.fecha + (v.canal ? ' · ' + v.canal : '')), h('span', {}, pesos(v.neto))),
-        h('span', { class: 'venta-det' }, v.detalle || 'Sin productos'))));
+        h('span', { class: 'venta-cab' }, h('span', {}, 'Venta ' + v.id + ' · ' + v.fecha + (v.canal ? ' · ' + v.canal : '')), h('span', {}, pesos(saldo(v)))),
+        h('span', { class: 'venta-det' }, yaCobrado + (v.detalle || 'Sin productos')))));
   });
-  const m = marco('Ventas que cobra', caja, { grupo: true, ayuda: pend.length ? 'Tildá las ventas que cubre este cobro.' : '' });
-  function suma() { return Object.keys(elegidas).reduce(function (s, id) { return s + elegidas[id].neto; }, 0); }
+  const m = marco('Ventas que cobra', caja, { grupo: true, ayuda: pend.length ? 'Tildá las ventas que cubre este cobro. El monto de cada una es lo que falta cobrar.' : '' });
+  function suma() { return Object.keys(elegidas).reduce(function (s, id) { return s + saldo(elegidas[id]); }, 0); }
   return {
     nombre: 'ventas', nodo: m.nodo, error: m.error,
     valor: function () { return Object.keys(elegidas).map(Number).sort(function (a, b) { return a - b; }); },
@@ -610,6 +640,12 @@ const TIPOS = {
     desc: 'Un pedido, con sus productos y lo que cobraste.',
     intro: 'Una carga por pedido.',
     grupos: function () {
+      // «Cobré una parte»: la venta queda sin cobrar y la seña se guarda aparte, como un pago parcial.
+      const sena = plata('montoSena', 'Seña cobrada', { ayuda: 'Lo que te pagaron ahora. Lo que falta queda sin cobrar hasta que cargues el cobro.' });
+      const dondeSena = chips('formaPagoSena', 'Dónde entró la seña', L.cuentas);
+      sena.mostrar(false);
+      dondeSena.mostrar(false);
+      const formas = L.cuentas.concat([L.pendiente], L.cobreParte ? [L.cobreParte] : []);
       return [
         [chips('canal', 'Canal', L.canales)],
         [lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto')],
@@ -617,7 +653,12 @@ const TIPOS = {
           plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó. En Cler, lo que le pagó a Cler.' }),
           plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
           plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
-          chips('formaPago', 'Forma de pago', L.cuentas.concat([L.pendiente]), { ayuda: 'Dónde entró la plata.' }),
+          chips('formaPago', 'Forma de pago', formas, {
+            ayuda: 'Dónde entró la plata. Si te pagaron una seña, «Cobré una parte».',
+            alCambiar: function (f) { sena.mostrar(f === L.cobreParte); dondeSena.mostrar(f === L.cobreParte); },
+          }),
+          sena,
+          dondeSena,
         ],
         [
           texto('cliente', 'Cliente', { opcional: true, ayuda: 'Nombre, para la postventa.' }),
@@ -629,28 +670,56 @@ const TIPOS = {
       if (v.montoBruto && v.montoNeto && numero(v.montoNeto) > numero(v.montoBruto)) {
         return ['montoNeto', 'El neto no puede ser mayor que lo que pagó el cliente.'];
       }
+      if (v.formaPago === L.cobreParte) {
+        if (!(numero(v.montoSena) > 0)) return ['montoSena', 'La seña tiene que ser mayor que cero.'];
+        if (numero(v.montoSena) >= numero(v.montoNeto)) {
+          return ['montoSena', 'Tiene que ser menor que el monto neto. Si te pagaron todo, elegí dónde entró la plata.'];
+        }
+      }
     },
-    resumen: function (v) { return v.canal + ' · ' + plural(v.lineas.length, 'producto', 'productos') + ' · ' + pesos(numero(v.montoBruto)); },
+    resumen: function (v) {
+      return v.canal + ' · ' + plural(v.lineas.length, 'producto', 'productos') + ' · ' + pesos(numero(v.montoBruto)) +
+        (v.formaPago === L.cobreParte ? ' · seña de ' + pesos(numero(v.montoSena)) : '');
+    },
   },
   cobro: {
-    desc: 'La plata de una venta que cargaste sin cobrar.',
+    desc: 'La plata, o una parte, de una venta que cargaste sin cobrar.',
     intro: 'Para las ventas cargadas como «Todavía no la cobré», también las de Cler.',
     grupos: function () {
+      const AYUDA = 'Se completa con lo que falta cobrar de las ventas elegidas. Si te pagaron otro monto, corregilo y anotá por qué en Notas.';
       let automatico = true;
-      const monto = plata('montoNeto', 'Monto cobrado', {
-        ayuda: 'Se completa con lo que suman las ventas elegidas. Si te pagaron otro monto, corregilo y anotá por qué en Notas.',
-        alEscribir: function () { automatico = false; },
+      let total = 0;
+      const monto = plata('montoNeto', 'Monto cobrado', { ayuda: AYUDA, alEscribir: function () { automatico = false; } });
+      const ayudaParcial = function () { return 'Lo que te pagaron ahora. Tiene que ser menor que lo que falta: ' + pesos(total) + '.'; };
+      // Solo con una venta elegida. Tildada, el monto no se completa solo y la venta sigue sin cobrar por el resto.
+      const parcial = casilla('parcial', 'Es una parte (seña)', 'La venta sigue sin cobrar por lo que falta.', function (si) {
+        automatico = !si;
+        monto.poner(si ? '' : (total ? aTexto(total) : ''));
+        monto.ayuda(si ? ayudaParcial() : AYUDA);
       });
-      const ventas = ventasPendientes(function (total) {
-        if (automatico) monto.poner(total ? aTexto(total) : '');
+      parcial.mostrar(false);
+      const ventas = ventasPendientes(function (t, n) {
+        total = t;
+        parcial.mostrar(n === 1);
+        if (automatico) monto.poner(t ? aTexto(t) : '');
       });
       return [
         [ventas],
-        [monto, chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'Dónde entró la plata.' })],
+        [parcial, monto, chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'Dónde entró la plata.' })],
       ];
     },
+    cruzar: function (v) {
+      if (!v.parcial) return;
+      const venta = (D.pendientes || []).filter(function (x) { return x.id === v.ventas[0]; })[0];
+      const n = numero(v.montoNeto);
+      if (!(n > 0)) return ['montoNeto', 'Tiene que ser mayor que cero.'];
+      if (venta && n >= saldo(venta)) {
+        return ['montoNeto', 'Tiene que ser menor que lo que falta: ' + pesos(saldo(venta)) + '. Si te pagaron todo, destildá «Es una parte».'];
+      }
+    },
     resumen: function (v) {
-      return (v.ventas.length === 1 ? 'Venta ' : 'Ventas ') + lista(v.ventas.map(String)) + ' · ' + pesos(numero(v.montoNeto));
+      const cuales = v.parcial ? 'Pago parcial de la venta ' + v.ventas[0] : (v.ventas.length === 1 ? 'Venta ' : 'Ventas ') + lista(v.ventas.map(String));
+      return cuales + ' · ' + pesos(numero(v.montoNeto));
     },
   },
   compra: {
@@ -853,8 +922,12 @@ function guardar() {
       const detalle = nombre + ' · ' + TIPOS[tipo].resumen(v);
       codigo = nuevoCodigo();
       menu();
-      aviso(r.repetida ? 'Ya estaba guardada (carga ' + r.id + ')' : 'Listo, quedó guardada (carga ' + r.id + ')',
-        r.repetida ? detalle + '. No se cargó dos veces.' : detalle);
+      // Una venta con «Cobré una parte» son dos cargas: la venta y la seña.
+      const titulo = r.sena
+        ? (r.repetida ? 'Ya estaban guardadas (cargas ' + r.id + ' y ' + r.sena + ')'
+          : 'Listo, quedaron guardadas la venta (carga ' + r.id + ') y la seña (carga ' + r.sena + ')')
+        : (r.repetida ? 'Ya estaba guardada (carga ' + r.id + ')' : 'Listo, quedó guardada (carga ' + r.id + ')');
+      aviso(titulo, r.repetida ? detalle + '. No se cargó dos veces.' : detalle);
       cargarListas(true);
     })
     .catch(function (e) {
