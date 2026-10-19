@@ -110,6 +110,10 @@
     background: transparent; color: var(--bordo); font: inherit; font-weight: 600;
   }
   .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  /* Lo que lleva un kit: tarjetas dentro de la tarjeta del kit. */
+  .linea .linea { background: #fff; padding: 10px; }
+  .linea .campo.partes { border-top: 1px solid var(--linea); padding-top: 14px; margin-top: 4px; }
+  .ayuda.arriba { margin: -2px 0 10px; }
 
   .pasos { display: flex; gap: 8px; align-items: stretch; }
   .paso {
@@ -484,43 +488,72 @@ function color() {
   };
 }
 
-function lineaProducto() {
+// Un producto: categoría, producto, color y unidades.
+// o.kits: también los kits, que en vez de color piden lo que llevan (solo en la venta).
+// o.inicial y o.cantidad: el producto y las unidades con que arranca (las partes de un kit, desde su receta).
+// o.unidades: el título de las unidades.
+function lineaProducto(o) {
+  o = o || {};
+  const lista = D.productos.filter(function (p) { return o.kits || !p.k; });
   const cat = h('select', {});
-  llenar(cat, 'Elegí la categoría', unicos(D.productos.map(function (p) { return p.c; })));
+  llenar(cat, 'Elegí la categoría', unicos(lista.map(function (p) { return p.c; })));
   const prod = h('select', { disabled: true });
   llenar(prod, 'Primero elegí la categoría', []);
   const col = color();
-  const uni = h('input', { type: 'text', inputmode: 'numeric', value: '1', maxlength: 3 });
+  const uni = h('input', { type: 'text', inputmode: 'numeric', value: String(o.cantidad || 1), maxlength: 3 });
   const paso = function (d) { uni.value = String(Math.max(1, (parseInt(uni.value, 10) || 0) + d)); fu.error(''); };
   const fc = marco('Categoría', cat), fp = marco('Producto', prod);
-  const fu = marco('Unidades', h('div', { class: 'pasos' },
+  const fu = marco(o.unidades || 'Unidades', h('div', { class: 'pasos' },
     h('button', { type: 'button', class: 'paso', 'aria-label': 'Una menos', onclick: function () { paso(-1); } }, '−'),
     uni,
     h('button', { type: 'button', class: 'paso', 'aria-label': 'Una más', onclick: function () { paso(1); } }, '+')), { grupo: true });
-  const elegido = function () { return D.productos.filter(function (p) { return p.n === prod.value; })[0]; };
+  // Lo que lleva un kit: una tarjeta por producto, con la receta como punto de partida.
+  const partes = o.kits ? bloque('Qué lleva cada kit', 'Parte', 'Agregar otro producto al kit', function (d) {
+    return lineaProducto({ inicial: d && d.n, cantidad: d && d.q, unidades: 'Unidades por kit' });
+  }, 'Sale de la receta. Cambiá el diseño o el producto si hace falta y elegí el color de cada uno.') : null;
+  if (partes) { partes.nodo.classList.add('partes'); partes.nodo.hidden = true; }
+  const ponerPartes = function (contenido) {
+    if (!partes) return;
+    partes.vaciar();
+    partes.nodo.hidden = !contenido;
+    if (contenido) (contenido.length ? contenido : [null]).forEach(function (d) { partes.nueva(d, false); });
+  };
+  const elegido = function () { return lista.filter(function (p) { return p.n === prod.value; })[0]; };
+  const esKit = function () { const p = elegido(); return !!(p && p.k); };
   const alProducto = function () {
     const p = elegido();
-    if (!p) return col.poner(undefined);
+    col.mostrar(!(p && p.k));
+    if (!p) { ponerPartes(null); return col.poner(undefined); }
+    if (p.k) { col.poner(undefined); return ponerPartes((D.kits && D.kits[p.n]) || []); }
+    ponerPartes(null);
     col.poner(coloresProducto(p), p.t === 'Varias' ? 'Colores o contenido' : '');
   };
-  cat.addEventListener('change', function () {
-    const lista = D.productos.filter(function (p) { return p.c === cat.value; }).map(function (p) { return p.n; });
-    llenar(prod, lista.length === 1 ? null : (cat.value ? 'Elegí el producto' : 'Primero elegí la categoría'), lista);
+  const alCategoria = function () {
+    const nombres = lista.filter(function (p) { return p.c === cat.value; }).map(function (p) { return p.n; });
+    llenar(prod, nombres.length === 1 ? null : (cat.value ? 'Elegí el producto' : 'Primero elegí la categoría'), nombres);
     prod.disabled = !cat.value;
     fc.error(''); fp.error('');
     alProducto();
-  });
+  };
+  cat.addEventListener('change', alCategoria);
   prod.addEventListener('change', function () { fp.error(''); alProducto(); });
   uni.addEventListener('input', function () { fu.error(''); });
+  const inicial = o.inicial && lista.filter(function (p) { return p.n === o.inicial; })[0];
+  if (inicial) { cat.value = inicial.c; alCategoria(); prod.value = inicial.n; alProducto(); }
   return {
-    nodo: [fc.nodo, fp.nodo, col.nodo, fu.nodo],
-    valor: function () { return { producto: prod.value, color: col.valor(), cantidad: uni.value.trim() }; },
+    nodo: [fc.nodo, fp.nodo, col.nodo, fu.nodo].concat(partes ? [partes.nodo] : []),
+    valor: function () {
+      const v = { producto: prod.value, color: esKit() ? '' : col.valor(), cantidad: uni.value.trim() };
+      if (esKit()) v.partes = partes.valor();
+      return v;
+    },
     validar: function () {
       const e = [
         fc.error(cat.value ? '' : 'Elegí la categoría.'),
         fp.error(cat.value && !prod.value ? 'Elegí el producto.' : ''),
         col.validar(),
         fu.error(/^[1-9][0-9]{0,2}$/.test(uni.value.trim()) ? '' : 'Un número entero: 1, 2, 3…'),
+        esKit() ? partes.validar() : '',
       ];
       return e.filter(String)[0] || '';
     },
@@ -536,15 +569,25 @@ function lineaInsumo() {
   const col = color();
   col.mostrar(false);
   const cant = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off' });
+  const det = h('input', { type: 'text', autocomplete: 'off', maxlength: 200 });
   const ft = marco('Tipo de insumo', tipo), fi = marco('Insumo', ins), fq = marco('Cantidad', cant);
+  // Lo que se compra para un trabajo a medida va sin color ni cantidad: alcanza con el trabajo y el monto.
+  const fd = marco('Para qué trabajo', det, { ayuda: 'El trabajo y lo que compraste. Por ejemplo: «Cortinas de Analía: 8 m de lino».' });
+  fd.nodo.hidden = true;
   const monto = plata('monto', 'Monto', { ayuda: 'Lo que pagaste por este insumo, sin el envío.' });
   const elegido = function () { return D.insumos.filter(function (i) { return i.n === ins.value; })[0]; };
+  const aMedida = function () { const i = elegido(); return !!(i && i.t === (L.aMedida || 'A medida')); };
   const alInsumo = function () {
     const i = elegido();
-    col.mostrar(!!(i && i.l));
-    col.poner(i && i.l ? (D.colores[i.l] || []) : undefined);
+    const am = aMedida();
+    col.mostrar(!!(i && i.l) && !am);
+    col.poner(i && i.l && !am ? (D.colores[i.l] || []) : undefined);
+    fq.nodo.hidden = am;
+    fd.nodo.hidden = !am;
+    fq.error(''); fd.error('');
     fq.ayuda(i ? (i.u === 'Metros' ? 'En metros.' : 'En unidades.') : '');
   };
+  det.addEventListener('input', function () { fd.error(''); });
   tipo.addEventListener('change', function () {
     const lista = D.insumos.filter(function (i) { return i.t === tipo.value; }).map(function (i) { return i.n; });
     llenar(ins, lista.length === 1 ? null : (tipo.value ? 'Elegí el insumo' : 'Primero elegí el tipo'), lista);
@@ -555,14 +598,19 @@ function lineaInsumo() {
   ins.addEventListener('change', function () { fi.error(''); alInsumo(); });
   cant.addEventListener('input', function () { fq.error(''); });
   return {
-    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo, monto.nodo],
-    valor: function () { return { insumo: ins.value, color: col.valor(), cantidad: cant.value.trim(), monto: monto.valor() }; },
+    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo, fd.nodo, monto.nodo],
+    valor: function () {
+      const am = aMedida();
+      return { insumo: ins.value, color: am ? '' : col.valor(), cantidad: am ? '' : cant.value.trim(), detalle: am ? det.value.trim() : '', monto: monto.valor() };
+    },
     validar: function () {
+      const am = aMedida();
       const e = [
         ft.error(tipo.value ? '' : 'Elegí el tipo.'),
         fi.error(tipo.value && !ins.value ? 'Elegí el insumo.' : ''),
         col.validar(),
-        fq.error(errCantidad(cant.value)),
+        fq.error(am ? '' : errCantidad(cant.value)),
+        fd.error(am && !det.value.trim() ? 'Falta completarlo.' : ''),
         monto.validar(),
       ];
       return e.filter(String)[0] || '';
@@ -571,30 +619,40 @@ function lineaInsumo() {
   };
 }
 
-function lineas(nombre, etiqueta, fabrica, cada, textoAgregar) {
+// Una lista de tarjetas que se agregan y se quitan (productos, insumos, partes de un kit).
+// fabrica(dato) arma cada tarjeta; nueva(dato, foco) agrega una y vaciar() las saca todas.
+function bloque(etiqueta, cada, textoAgregar, fabrica, ayuda) {
   const caja = h('div', {});
   const items = [];
-  const nodo = h('div', { class: 'campo' }, h('span', { class: 'etq' }, etiqueta), caja,
-    h('button', { type: 'button', class: 'agregar', onclick: function () { nueva(true); } }, '+ ' + textoAgregar));
-  function nueva(foco) {
-    const it = fabrica();
+  const nodo = h('div', { class: 'campo' }, h('span', { class: 'etq' }, etiqueta),
+    ayuda ? h('p', { class: 'ayuda arriba' }, ayuda) : null, caja,
+    h('button', { type: 'button', class: 'agregar', onclick: function () { nueva(null, true); } }, '+ ' + textoAgregar));
+  function nueva(dato, foco) {
+    const it = fabrica(dato);
     const titulo = h('span', { class: 'num' });
     const quitar = h('button', { type: 'button', class: 'quitar' }, 'Quitar');
     const tarjeta = h('div', { class: 'linea' }, h('div', { class: 'linea-cab' }, titulo, quitar), it.nodo);
     quitar.addEventListener('click', function () { items.splice(items.indexOf(it), 1); tarjeta.remove(); renumerar(); });
-    it.titulo = titulo; it.quitar = quitar;
+    it.titulo = titulo; it.quitar = quitar; it.tarjeta = tarjeta;
     items.push(it); caja.append(tarjeta); renumerar();
     if (foco) { tarjeta.scrollIntoView({ block: 'center', behavior: 'smooth' }); it.enfocar(); }
   }
   function renumerar() {
     items.forEach(function (it, i) { it.titulo.textContent = cada + ' ' + (i + 1); it.quitar.hidden = items.length < 2; });
   }
-  nueva(false);
   return {
-    nombre: nombre, nodo: nodo, error: function () { return ''; },
+    nodo: nodo,
+    nueva: nueva,
+    vaciar: function () { items.splice(0).forEach(function (it) { it.tarjeta.remove(); }); },
     valor: function () { return items.map(function (it) { return it.valor(); }); },
     validar: function () { return items.map(function (it) { return it.validar(); }).filter(String)[0] || ''; },
   };
+}
+
+function lineas(nombre, etiqueta, fabrica, cada, textoAgregar) {
+  const b = bloque(etiqueta, cada, textoAgregar, fabrica);
+  b.nueva(null, false);
+  return { nombre: nombre, nodo: b.nodo, error: function () { return ''; }, valor: b.valor, validar: b.validar };
 }
 
 // Lo que falta cobrar de una venta: el neto menos sus pagos parciales.
@@ -648,13 +706,13 @@ const TIPOS = {
       const formas = L.cuentas.concat([L.pendiente], L.cobreParte ? [L.cobreParte] : []);
       return [
         [chips('canal', 'Canal', L.canales)],
-        [lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto')],
+        [lineas('lineas', 'Productos', function () { return lineaProducto({ kits: true }); }, 'Producto', 'Agregar otro producto')],
         [
           plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó. En Cler, lo que le pagó a Cler.' }),
           plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
           plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
           chips('formaPago', 'Forma de pago', formas, {
-            ayuda: 'Dónde entró la plata. Si te pagaron una seña, «Cobré una parte».',
+            ayuda: 'Dónde entró la plata; en la tienda, Pago Nube. Si te pagaron una seña, «Cobré una parte».',
             alCambiar: function (f) { sena.mostrar(f === L.cobreParte); dondeSena.mostrar(f === L.cobreParte); },
           }),
           sena,
@@ -724,7 +782,7 @@ const TIPOS = {
   },
   compra: {
     desc: 'Tela, relleno, avíos y packaging.',
-    intro: 'Una carga por compra. El envío va una sola vez, al final.',
+    intro: 'Una carga por compra. El envío va una sola vez, al final. Lo que comprás para un trabajo a medida va con el tipo «A medida».',
     grupos: function () {
       return [
         [texto('proveedor', 'Proveedor', { sugerencias: D.proveedores })],
@@ -763,7 +821,7 @@ const TIPOS = {
     grupos: function () {
       return [
         [chips('motivo', 'Motivo', L.motivos)],
-        [lineas('lineas', 'Productos', lineaProducto, 'Producto', 'Agregar otro producto')],
+        [lineas('lineas', 'Productos', function () { return lineaProducto(); }, 'Producto', 'Agregar otro producto')],
       ];
     },
     resumen: function (v) {
@@ -790,7 +848,7 @@ const TIPOS = {
     intro: 'Retiros para vos, aportes de plata tuya y pases entre cuentas.',
     grupos: function () {
       return [[
-        chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio.' }),
+        chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio. Lo que retirás de la tienda sale de Pago Nube.' }),
         chips('hacia', 'Hacia', L.cuentas.concat([L.retiro]), { ayuda: 'Retiro: plata del negocio que sacás para vos.' }),
         plata('montoNeto', 'Monto'),
       ]];
