@@ -492,11 +492,13 @@ function color() {
 // o.kits: también los kits, que en vez de color piden lo que llevan (solo en la venta).
 // o.inicial y o.cantidad: el producto y las unidades con que arranca (las partes de un kit, desde su receta).
 // o.unidades: el título de las unidades.
+// o.armado: solo los almohadones que se arman con su funda (motivo Armado de Almohadón).
 function lineaProducto(o) {
   o = o || {};
-  const lista = D.productos.filter(function (p) { return o.kits || !p.k; });
+  const lista = D.productos.filter(function (p) { return o.armado ? !!p.a : (o.kits || !p.k); });
+  const cats = unicos(lista.map(function (p) { return p.c; }));
   const cat = h('select', {});
-  llenar(cat, 'Elegí la categoría', unicos(lista.map(function (p) { return p.c; })));
+  llenar(cat, 'Elegí la categoría', cats);
   const prod = h('select', { disabled: true });
   llenar(prod, 'Primero elegí la categoría', []);
   const col = color();
@@ -522,6 +524,7 @@ function lineaProducto(o) {
   const esKit = function () { const p = elegido(); return !!(p && p.k); };
   const alProducto = function () {
     const p = elegido();
+    if (o.armado) fp.ayuda(p ? 'Sale del stock la ' + p.a + ', del mismo color.' : '');
     col.mostrar(!(p && p.k));
     if (!p) { ponerPartes(null); return col.poner(undefined); }
     if (p.k) { col.poner(undefined); return ponerPartes((D.kits && D.kits[p.n]) || []); }
@@ -540,6 +543,7 @@ function lineaProducto(o) {
   uni.addEventListener('input', function () { fu.error(''); });
   const inicial = o.inicial && lista.filter(function (p) { return p.n === o.inicial; })[0];
   if (inicial) { cat.value = inicial.c; alCategoria(); prod.value = inicial.n; alProducto(); }
+  else if (cats.length === 1) { cat.value = cats[0]; alCategoria(); }
   return {
     nodo: [fc.nodo, fp.nodo, col.nodo, fu.nodo].concat(partes ? [partes.nodo] : []),
     valor: function () {
@@ -819,9 +823,22 @@ const TIPOS = {
     desc: 'Lo que producís y lo que entra o sale del stock sin venderse.',
     intro: 'Lo que entra o sale del stock de productos terminados sin ser una venta.',
     grupos: function () {
+      // Armado de Almohadón: se eligen solo almohadones y sale su funda. Al entrar o salir de ese motivo,
+      // los productos se vuelven a empezar.
+      let armado = false;
+      const b = bloque('Productos', 'Producto', 'Agregar otro producto', function () { return lineaProducto({ armado: armado }); });
+      b.nueva(null, false);
+      const motivos = L.motivos.slice();
+      if (L.armado) motivos.splice(1, 0, L.armado);
       return [
-        [chips('motivo', 'Motivo', L.motivos)],
-        [lineas('lineas', 'Productos', function () { return lineaProducto(); }, 'Producto', 'Agregar otro producto')],
+        [chips('motivo', 'Motivo', motivos, {
+          alCambiar: function (m, campo) {
+            const si = m === L.armado;
+            campo.ayuda(si ? 'Una funda que rellenaste: elegí el almohadón y sale del stock su funda, del mismo color.' : '');
+            if (si !== armado) { armado = si; b.vaciar(); b.nueva(null, false); }
+          },
+        })],
+        [{ nombre: 'lineas', nodo: b.nodo, error: function () { return ''; }, valor: b.valor, validar: b.validar }],
       ];
     },
     resumen: function (v) {
