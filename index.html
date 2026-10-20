@@ -44,13 +44,12 @@
   .tipos { display: flex; flex-direction: column; gap: 10px; }
   .tipo {
     width: 100%; display: flex; align-items: center; gap: 12px; text-align: left;
-    padding: 14px 16px; min-height: 64px; border-radius: 14px; border: 1px solid var(--linea);
+    padding: 14px 16px; min-height: 56px; border-radius: 14px; border: 1px solid var(--linea);
     background: #fff; color: var(--tinta); font: inherit;
   }
   .tipo:active { background: var(--crema); }
   .tipo-texto { flex: 1; min-width: 0; }
   .tipo-nombre { display: block; font-weight: 700; font-size: 17px; }
-  .tipo-desc { display: block; color: var(--gris); font-size: 13px; margin-top: 2px; }
   .flecha { color: var(--bordo); font-size: 22px; line-height: 1; }
 
   .tarjeta { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 14px; margin-bottom: 12px; min-width: 0; }
@@ -699,7 +698,6 @@ function ventasPendientes(alCambiar) {
 
 const TIPOS = {
   venta: {
-    desc: 'Un pedido, con sus productos y lo que cobraste.',
     intro: 'Una carga por pedido.',
     grupos: function () {
       // «Cobré una parte»: la venta queda sin cobrar y la seña se guarda aparte, como un pago parcial.
@@ -716,7 +714,7 @@ const TIPOS = {
           plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
           plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
           chips('formaPago', 'Forma de pago', formas, {
-            ayuda: 'Dónde entró la plata; en la tienda, Pago Nube. Si te pagaron una seña, «Cobré una parte».',
+            ayuda: 'Dónde entró la plata: en la tienda, Pago Nube, y en Mercado Libre, Mercado Libre. Si te pagaron una seña, «Cobré una parte».',
             alCambiar: function (f) { sena.mostrar(f === L.cobreParte); dondeSena.mostrar(f === L.cobreParte); },
           }),
           sena,
@@ -745,7 +743,6 @@ const TIPOS = {
     },
   },
   cobro: {
-    desc: 'La plata, o una parte, de una venta que cargaste sin cobrar.',
     intro: 'Para las ventas cargadas como «Todavía no la cobré», también las de Cler.',
     grupos: function () {
       const AYUDA = 'Se completa con lo que falta cobrar de las ventas elegidas. Si te pagaron otro monto, corregilo y anotá por qué en Notas.';
@@ -785,7 +782,6 @@ const TIPOS = {
     },
   },
   compra: {
-    desc: 'Tela, relleno, avíos y packaging.',
     intro: 'Una carga por compra. El envío va una sola vez, al final. Lo que comprás para un trabajo a medida va con el tipo «A medida».',
     grupos: function () {
       return [
@@ -803,7 +799,6 @@ const TIPOS = {
     },
   },
   gasto: {
-    desc: 'Plataformas, publicidad, impuestos y equipos.',
     intro: 'Todo lo que no es insumo. Los envíos van en su venta o en su compra.',
     grupos: function () {
       return [
@@ -820,7 +815,6 @@ const TIPOS = {
     resumen: function (v) { return v.categoria + ' · ' + pesos(numero(v.montoNeto)); },
   },
   ajuste: {
-    desc: 'Lo que producís y lo que entra o sale del stock sin venderse.',
     intro: 'Lo que entra o sale del stock de productos terminados sin ser una venta.',
     grupos: function () {
       // Armado de Almohadón: se eligen solo almohadones y sale su funda. Al entrar o salir de ese motivo,
@@ -847,7 +841,6 @@ const TIPOS = {
     },
   },
   horas: {
-    desc: 'Una sesión de trabajo.',
     intro: 'Una carga por sesión de trabajo.',
     grupos: function () {
       return [[
@@ -861,11 +854,10 @@ const TIPOS = {
     },
   },
   dinero: {
-    desc: 'Plata tuya que entra o sale, y pases entre cuentas.',
-    intro: 'Retiros para vos, aportes de plata tuya y pases entre cuentas.',
+    intro: 'Pases entre cuentas, como lo que libera Mercado Libre o lo que retirás de la tienda; retiros para vos y aportes de plata tuya.',
     grupos: function () {
       return [[
-        chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio. Lo que retirás de la tienda sale de Pago Nube.' }),
+        chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio. Lo que libera Mercado Libre sale de Mercado Libre, y lo que retirás de la tienda, de Pago Nube.' }),
         chips('hacia', 'Hacia', L.cuentas.concat([L.retiro]), { ayuda: 'Retiro: plata del negocio que sacás para vos.' }),
         plata('montoNeto', 'Monto'),
       ]];
@@ -905,7 +897,7 @@ function cargarListas(silencio) {
       $('cargando').hidden = true;
       $('tipos').replaceChildren.apply($('tipos'), L.tipos.filter(function (t) { return TIPOS[t.codigo]; }).map(function (t) {
         return h('button', { type: 'button', class: 'tipo', onclick: function () { elegir(t); } },
-          h('span', { class: 'tipo-texto' }, h('span', { class: 'tipo-nombre' }, t.nombre), h('span', { class: 'tipo-desc' }, TIPOS[t.codigo].desc)),
+          h('span', { class: 'tipo-texto' }, h('span', { class: 'tipo-nombre' }, t.nombre)),
           h('span', { class: 'flecha', 'aria-hidden': 'true' }, '›'));
       }));
     })
