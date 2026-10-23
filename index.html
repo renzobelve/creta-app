@@ -148,6 +148,7 @@
   .primario:active { background: var(--bordo-osc); }
   .primario:disabled { opacity: .6; }
   .enlace { border: 0; background: none; color: var(--bordo); font: inherit; font-size: 15px; text-decoration: underline; padding: 6px 0; }
+  .enlace:disabled { color: var(--gris); text-decoration: none; }
 </style>
 </head>
 <body>
@@ -205,20 +206,35 @@ function leerClave() {
 
 // Habla con la planilla sin cookies, así no importa qué cuentas de Google tenga abiertas el navegador.
 // Un error de red viene marcado con .red; uno de la planilla trae su mensaje.
+// Si la respuesta no llega en ESPERA ms, se corta y cuenta como error de red: con la página en segundo plano
+// (en el celular, al cambiar de app), el pedido puede quedar colgado para siempre sin fallar.
+const ESPERA = 45000;
+const enCurso = [];
 function pedir(metodo, url, cuerpo) {
-  const op = { method: metodo, credentials: 'omit', redirect: 'follow' };
+  const corte = window.AbortController ? new AbortController() : null;
+  const op = { method: metodo, credentials: 'omit', redirect: 'follow', signal: corte ? corte.signal : undefined };
   if (cuerpo) {
     op.headers = { 'Content-Type': 'text/plain;charset=utf-8' };
     op.body = JSON.stringify(cuerpo);
   }
+  const pedido = { inicio: Date.now(), cortar: function () { if (corte) corte.abort(); } };
+  enCurso.push(pedido);
+  const reloj = setTimeout(pedido.cortar, ESPERA);
+  const fin = function () { clearTimeout(reloj); const i = enCurso.indexOf(pedido); if (i > -1) enCurso.splice(i, 1); };
   return fetch(url, op)
     .then(function (res) { return res.json(); })
     .catch(function () { const e = new Error(''); e.red = true; throw e; })
     .then(function (j) {
+      fin();
       if (!j || !j.ok) throw new Error((j && j.error) || 'La planilla no respondió.');
       return j.r;
-    });
+    }, function (e) { fin(); throw e; });
 }
+// Al volver a la página, el reloj pudo haber estado frenado: lo que lleva más de ESPERA se corta ahora.
+document.addEventListener('visibilitychange', function () {
+  if (document.visibilityState !== 'visible') return;
+  enCurso.slice().forEach(function (p) { if (Date.now() - p.inicio >= ESPERA) p.cortar(); });
+});
 
 function h(tag, props) {
   const e = document.createElement(tag);
@@ -850,7 +866,7 @@ const TIPOS = {
     },
     resumen: function (v) {
       const t = Number(v.horas || 0) * 60 + Number(v.minutos || 0);
-      return v.tarea + ' · ' + (t >= 60 ? Math.floor(t / 60) + ' h ' : '') + (t % 60 ? (t % 60) + ' min' : '');
+      return v.tarea + ' · ' + ((t >= 60 ? Math.floor(t / 60) + ' h ' : '') + (t % 60 ? (t % 60) + ' min' : '')).trim();
     },
   },
   dinero: {
@@ -876,7 +892,7 @@ const $ = function (id) { return document.getElementById(id); };
 let tipo = '';
 let campos = [];
 let comunes = {};
-let codigo = nuevoCodigo();
+let codigo = '';
 let ocupado = false;
 
 // Lee las listas de la planilla. En silencio, después de guardar, para que las ventas sin cobrar estén al día.
@@ -903,7 +919,7 @@ function cargarListas(silencio) {
     })
     .catch(function (e) {
       if (silencio) return;
-      $('cargando').textContent = e.red ? 'No pude leer la planilla: revisá la conexión.' : e.message;
+      $('cargando').textContent = e.red ? 'No pude leer la planilla: revisá la conexión y tocá Reintentar.' : e.message;
       $('reintentar').hidden = !e.red;
     });
 }
@@ -929,6 +945,7 @@ function menu() {
 
 function elegir(t) {
   tipo = t.codigo;
+  codigo = nuevoCodigo();
   $('tipoTitulo').textContent = t.nombre;
   $('tipoIntro').textContent = TIPOS[tipo].intro;
   $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = false; $('pie').hidden = false;
@@ -980,6 +997,7 @@ function guardar() {
   }
   ocupado = true;
   $('guardar').disabled = true;
+  $('volver').disabled = true;
   $('guardar').textContent = 'Guardando…';
   $('estado').textContent = '';
   const nombre = $('tipoTitulo').textContent;
@@ -987,7 +1005,6 @@ function guardar() {
     .then(function (r) {
       liberar();
       const detalle = nombre + ' · ' + TIPOS[tipo].resumen(v);
-      codigo = nuevoCodigo();
       menu();
       // Una venta con «Cobré una parte» son dos cargas: la venta y la seña.
       const titulo = r.sena
@@ -1000,7 +1017,7 @@ function guardar() {
     .catch(function (e) {
       liberar();
       $('estado').textContent = e.red
-        ? 'No se pudo guardar: revisá la conexión y tocá Guardar de nuevo. No se carga dos veces.'
+        ? 'No llegó la respuesta de la planilla: puede que se haya guardado o no. Revisá la conexión y tocá Guardar de nuevo: si ya estaba, no se carga dos veces.'
         : e.message;
     });
 }
@@ -1008,6 +1025,7 @@ function guardar() {
 function liberar() {
   ocupado = false;
   $('guardar').disabled = false;
+  $('volver').disabled = false;
   $('guardar').textContent = 'Guardar';
 }
 </script>
