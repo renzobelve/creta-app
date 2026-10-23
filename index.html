@@ -287,6 +287,13 @@ function coloresProducto(p) {
   const suyos = todos.filter(function (c) { return palabras.indexOf(c.split(' ')[0]) > -1; });
   return suyos.length ? suyos : todos;
 }
+// Una venta a medida en la lista de la compra: «Venta 9 · 15/10 · Analía · Trabajo a medida».
+function textoVenta(v) {
+  return ['Venta ' + v.id, v.fecha, v.cliente, v.detalle].filter(String).join(' · ');
+}
+function esMedida(nombre) {
+  return D.productos.some(function (p) { return p.n === nombre && p.m; });
+}
 function llenar(sel, primera, opciones) {
   sel.textContent = '';
   if (primera) sel.append(h('option', { value: '' }, primera));
@@ -590,22 +597,39 @@ function lineaInsumo() {
   const cant = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off' });
   const det = h('input', { type: 'text', autocomplete: 'off', maxlength: 200 });
   const ft = marco('Tipo de insumo', tipo), fi = marco('Insumo', ins), fq = marco('Cantidad', cant);
-  // Lo que se compra para un trabajo a medida va sin color ni cantidad: alcanza con el trabajo y el monto.
-  const fd = marco('Para qué trabajo', det, { ayuda: 'El trabajo y lo que compraste. Por ejemplo: «Cortinas de Analía: 8 m de lino».' });
+  // Lo que se compra para un trabajo a medida va sin color ni cantidad: se elige la venta del trabajo
+  // (o se escribe el trabajo, si la venta no está cargada) y alcanza con el monto.
+  const ventas = D.ventasMedida || [];
+  const ven = h('select', {});
+  llenar(ven, 'Elegí la venta', ventas.map(function (v) { return [String(v.id), textoVenta(v)]; }).concat([[OTRO, 'Otro trabajo: escribirlo']]));
+  const fv = marco('Para qué venta', ven, { ayuda: 'Las ventas con productos a medida. Si la venta todavía no está cargada, elegí «Otro trabajo».' });
+  fv.nodo.hidden = true;
+  const fd = marco('Detalle', det);
   fd.nodo.hidden = true;
   const monto = plata('monto', 'Monto', { ayuda: 'Lo que pagaste por este insumo, sin el envío.' });
   const elegido = function () { return D.insumos.filter(function (i) { return i.n === ins.value; })[0]; };
   const aMedida = function () { const i = elegido(); return !!(i && i.t === (L.aMedida || 'A medida')); };
+  const ventaElegida = function () { return ventas.filter(function (v) { return String(v.id) === ven.value; })[0]; };
+  const alVenta = function () {
+    const otro = ven.value === OTRO;
+    fd.ayuda(otro ? 'El trabajo y lo que compraste. Por ejemplo: «Cortinas de Analía: 8 m de lino».'
+      : 'Lo que compraste, si querés. Por ejemplo: «8 m de lino».');
+    fv.error(''); fd.error('');
+  };
   const alInsumo = function () {
     const i = elegido();
     const am = aMedida();
     col.mostrar(!!(i && i.l) && !am);
     col.poner(i && i.l && !am ? (D.colores[i.l] || []) : undefined);
     fq.nodo.hidden = am;
+    fv.nodo.hidden = !am;
     fd.nodo.hidden = !am;
-    fq.error(''); fd.error('');
+    if (!am) { ven.value = ''; det.value = ''; }
+    fq.error('');
+    alVenta();
     fq.ayuda(i ? (i.u === 'Metros' ? 'En metros.' : 'En unidades.') : '');
   };
+  ven.addEventListener('change', alVenta);
   det.addEventListener('input', function () { fd.error(''); });
   tipo.addEventListener('change', function () {
     const lista = D.insumos.filter(function (i) { return i.t === tipo.value; }).map(function (i) { return i.n; });
@@ -617,10 +641,16 @@ function lineaInsumo() {
   ins.addEventListener('change', function () { fi.error(''); alInsumo(); });
   cant.addEventListener('input', function () { fq.error(''); });
   return {
-    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo, fd.nodo, monto.nodo],
+    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo, fv.nodo, fd.nodo, monto.nodo],
     valor: function () {
       const am = aMedida();
-      return { insumo: ins.value, color: am ? '' : col.valor(), cantidad: am ? '' : cant.value.trim(), detalle: am ? det.value.trim() : '', monto: monto.valor() };
+      const v = am ? ventaElegida() : null;
+      const d = det.value.trim();
+      // Con venta, el Detalle va igual (lo escrito o la venta), por si el script publicado todavía lo pide.
+      return {
+        insumo: ins.value, color: am ? '' : col.valor(), cantidad: am ? '' : cant.value.trim(),
+        venta: v ? String(v.id) : '', detalle: am ? (d || (v ? textoVenta(v) : '')) : '', monto: monto.valor(),
+      };
     },
     validar: function () {
       const am = aMedida();
@@ -629,8 +659,54 @@ function lineaInsumo() {
         fi.error(tipo.value && !ins.value ? 'Elegí el insumo.' : ''),
         col.validar(),
         fq.error(am ? '' : errCantidad(cant.value)),
-        fd.error(am && !det.value.trim() ? 'Falta completarlo.' : ''),
+        fv.error(am && !ven.value ? 'Elegí la venta.' : ''),
+        fd.error(am && ven.value === OTRO && !det.value.trim() ? 'Falta completarlo.' : ''),
         monto.validar(),
+      ];
+      return e.filter(String)[0] || '';
+    },
+    enfocar: function () { tipo.focus(); },
+  };
+}
+
+// Un insumo del stock que usa una venta a medida: tipo, insumo, color (si la tela tiene lista) y cantidad, sin monto.
+// No ofrece los insumos de Tipo «A medida», que se compran para el trabajo.
+function lineaUsado() {
+  const lista = D.insumos.filter(function (i) { return i.t !== (L.aMedida || 'A medida'); });
+  const tipo = h('select', {});
+  llenar(tipo, 'Elegí el tipo', unicos(lista.map(function (i) { return i.t; })));
+  const ins = h('select', { disabled: true });
+  llenar(ins, 'Primero elegí el tipo', []);
+  const col = color();
+  col.mostrar(false);
+  const cant = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off' });
+  const ft = marco('Tipo de insumo', tipo), fi = marco('Insumo', ins), fq = marco('Cantidad', cant);
+  const elegido = function () { return lista.filter(function (i) { return i.n === ins.value; })[0]; };
+  const alInsumo = function () {
+    const i = elegido();
+    col.mostrar(!!(i && i.l));
+    col.poner(i && i.l ? (D.colores[i.l] || []) : undefined);
+    fq.error('');
+    fq.ayuda(i ? (i.u === 'Metros' ? 'En metros.' : 'En unidades.') : '');
+  };
+  tipo.addEventListener('change', function () {
+    const nombres = lista.filter(function (i) { return i.t === tipo.value; }).map(function (i) { return i.n; });
+    llenar(ins, nombres.length === 1 ? null : (tipo.value ? 'Elegí el insumo' : 'Primero elegí el tipo'), nombres);
+    ins.disabled = !tipo.value;
+    ft.error(''); fi.error('');
+    alInsumo();
+  });
+  ins.addEventListener('change', function () { fi.error(''); alInsumo(); });
+  cant.addEventListener('input', function () { fq.error(''); });
+  return {
+    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo],
+    valor: function () { return { insumo: ins.value, color: col.valor(), cantidad: cant.value.trim() }; },
+    validar: function () {
+      const e = [
+        ft.error(tipo.value ? '' : 'Elegí el tipo.'),
+        fi.error(tipo.value && !ins.value ? 'Elegí el insumo.' : ''),
+        col.validar(),
+        fq.error(errCantidad(cant.value)),
       ];
       return e.filter(String)[0] || '';
     },
@@ -640,7 +716,8 @@ function lineaInsumo() {
 
 // Una lista de tarjetas que se agregan y se quitan (productos, insumos, partes de un kit).
 // fabrica(dato) arma cada tarjeta; nueva(dato, foco) agrega una y vaciar() las saca todas.
-function bloque(etiqueta, cada, textoAgregar, fabrica, ayuda) {
+// minimo: 0 si la lista puede quedar vacía (se puede quitar la única tarjeta); si no, siempre queda una.
+function bloque(etiqueta, cada, textoAgregar, fabrica, ayuda, minimo) {
   const caja = h('div', {});
   const items = [];
   const nodo = h('div', { class: 'campo' }, h('span', { class: 'etq' }, etiqueta),
@@ -657,7 +734,7 @@ function bloque(etiqueta, cada, textoAgregar, fabrica, ayuda) {
     if (foco) { tarjeta.scrollIntoView({ block: 'center', behavior: 'smooth' }); it.enfocar(); }
   }
   function renumerar() {
-    items.forEach(function (it, i) { it.titulo.textContent = cada + ' ' + (i + 1); it.quitar.hidden = items.length < 2; });
+    items.forEach(function (it, i) { it.titulo.textContent = cada + ' ' + (i + 1); it.quitar.hidden = minimo !== 0 && items.length < 2; });
   }
   return {
     nodo: nodo,
@@ -722,9 +799,26 @@ const TIPOS = {
       sena.mostrar(false);
       dondeSena.mostrar(false);
       const formas = L.cuentas.concat([L.pendiente], L.cobreParte ? [L.cobreParte] : []);
+      const productos = lineas('lineas', 'Productos', function () { return lineaProducto({ kits: true }); }, 'Producto', 'Agregar otro producto');
+      // Los insumos del stock que usa un trabajo a medida: solo aparece con un producto a medida en la venta.
+      const usados = bloque('Insumos del stock que usa', 'Insumo', 'Agregar insumo del stock', lineaUsado,
+        'Solo en trabajos a medida: la tela u otro insumo que ya tenías y usaste. Lo que compraste para el trabajo va en Compra de Insumos.', 0);
+      usados.nodo.hidden = true;
+      const actualizar = function () {
+        const hay = productos.valor().some(function (p) { return esMedida(p.producto); });
+        if (!hay && !usados.nodo.hidden) usados.vaciar();
+        usados.nodo.hidden = !hay;
+      };
+      productos.nodo.addEventListener('change', actualizar);
+      productos.nodo.addEventListener('click', function () { setTimeout(actualizar, 0); });
+      const campoUsados = {
+        nombre: 'insumos', nodo: usados.nodo, error: function () { return ''; },
+        valor: function () { return usados.nodo.hidden ? [] : usados.valor(); },
+        validar: function () { return usados.nodo.hidden ? '' : usados.validar(); },
+      };
       return [
         [chips('canal', 'Canal', L.canales)],
-        [lineas('lineas', 'Productos', function () { return lineaProducto({ kits: true }); }, 'Producto', 'Agregar otro producto')],
+        [productos, campoUsados],
         [
           plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó. En Cler, lo que le pagó a Cler.' }),
           plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
@@ -755,7 +849,8 @@ const TIPOS = {
     },
     resumen: function (v) {
       return v.canal + ' · ' + plural(v.lineas.length, 'producto', 'productos') + ' · ' + pesos(numero(v.montoBruto)) +
-        (v.formaPago === L.cobreParte ? ' · seña de ' + pesos(numero(v.montoSena)) : '');
+        (v.formaPago === L.cobreParte ? ' · seña de ' + pesos(numero(v.montoSena)) : '') +
+        (v.insumos && v.insumos.length ? ' · ' + plural(v.insumos.length, 'insumo del stock', 'insumos del stock') : '');
     },
   },
   cobro: {
@@ -798,7 +893,7 @@ const TIPOS = {
     },
   },
   compra: {
-    intro: 'Una carga por compra. El envío va una sola vez, al final. Lo que comprás para un trabajo a medida va con el tipo «A medida».',
+    intro: 'Una carga por compra. El envío va una sola vez, al final. Lo que comprás para un trabajo a medida va con el tipo «A medida» y la venta del trabajo.',
     grupos: function () {
       return [
         [texto('proveedor', 'Proveedor', { sugerencias: D.proveedores })],
