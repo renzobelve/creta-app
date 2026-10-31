@@ -851,8 +851,8 @@ const TIPOS = {
         [chips('canal', 'Canal', L.canales)],
         [productos, campoUsados],
         [
-          plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó. En Cler, lo que le pagó a Cler.' }),
-          plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones. En Cler, lo que te paga Cler.' }),
+          plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó.' }),
+          plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones.' }),
           plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
           chips('formaPago', 'Forma de pago', formas, {
             ayuda: 'Dónde entró la plata: en la tienda, Pago Nube, y en Mercado Libre, Mercado Libre. Si te pagaron una seña, «Cobré una parte».',
@@ -885,7 +885,7 @@ const TIPOS = {
     },
   },
   cobro: {
-    intro: 'Para las ventas cargadas como «Todavía no la cobré», también las de Cler.',
+    intro: 'Para las ventas cargadas como «Todavía no la cobré».',
     grupos: function () {
       const AYUDA = 'Se completa con lo que falta cobrar de las ventas elegidas. Si te pagaron otro monto, corregilo y anotá por qué en Notas.';
       let automatico = true;
