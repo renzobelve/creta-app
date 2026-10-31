@@ -149,6 +149,37 @@
   .primario:disabled { opacity: .6; }
   .enlace { border: 0; background: none; color: var(--bordo); font: inherit; font-size: 15px; text-decoration: underline; padding: 6px 0; }
   .enlace:disabled { color: var(--gris); text-decoration: none; }
+
+  /* En la computadora (desde 900 px): todo más ancho, el menú en grilla y el formulario en dos columnas,
+     con las líneas (productos, insumos o ventas) a la izquierda. En el celular no cambia nada. */
+  @media (min-width: 900px) {
+    main { max-width: 1200px; }
+    .cab, .pie-in { max-width: 1152px; }
+    header { padding: 12px 24px; }
+    main { padding: 24px 24px 110px; }
+    .tipos { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+    .tipo { min-height: 72px; }
+    .columnas { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 16px; align-items: start; }
+    .columna { min-width: 0; }
+    .columna > .tarjeta:last-child { margin-bottom: 0; }
+    /* Cada línea a todo el ancho, con sus campos de a dos (Categoría y Producto, Color y Unidades);
+       el encabezado y las partes de un kit, a lo ancho. */
+    .columnas .linea { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 14px; row-gap: 14px; }
+    .columnas .linea > .campo { margin-bottom: 0; }
+    .columnas .linea > .linea-cab, .columnas .linea > .partes { grid-column: 1 / -1; }
+    .columnas .linea > .linea-cab { margin-bottom: -4px; }
+    .columnas .ventas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    .pie { padding: 12px 24px; }
+    .pie-in { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
+    .estado { margin: 0; flex: 1; text-align: right; }
+    .primario { width: 380px; flex: none; }
+  }
+  @media (min-width: 900px) and (hover: hover) {
+    .tipo, .chip, .paso, .agregar, .primario, .enlace, .quitar, .venta { cursor: pointer; }
+    .tipo:hover, .paso:hover, .chip[aria-pressed="false"]:hover { border-color: var(--bordo); }
+    .agregar:hover { background: #FFFCFB; }
+    .primario:hover:not(:disabled) { background: var(--bordo-osc); }
+  }
 </style>
 </head>
 <body>
@@ -989,6 +1020,31 @@ let campos = [];
 let comunes = {};
 let codigo = '';
 let ocupado = false;
+let armadas = [];
+
+// En la computadora el formulario va en dos columnas: a la izquierda las tarjetas principales y a la derecha
+// el resto (la fecha y las notas siempre). En el celular, una sola columna, en orden.
+// Las tarjetas se mueven sin rearmarse, así que lo cargado no se pierde al cambiar el ancho de la ventana.
+const ANCHO = window.matchMedia ? window.matchMedia('(min-width: 900px)') : null;
+function distribuir() {
+  const f = $('formulario');
+  if (!armadas.length) return;
+  if (!ANCHO || !ANCHO.matches) {
+    f.className = '';
+    f.replaceChildren.apply(f, armadas.map(function (a) { return a.nodo; }));
+    return;
+  }
+  const columna = function (principal) {
+    return h('div', { class: 'columna' }, armadas.filter(function (a) { return a.principal === principal; }).map(function (a) { return a.nodo; }));
+  };
+  f.className = 'columnas';
+  f.replaceChildren(columna(true), columna(false));
+}
+if (ANCHO) {
+  const alAncho = function () { if (tipo) distribuir(); };
+  if (ANCHO.addEventListener) ANCHO.addEventListener('change', alAncho);
+  else if (ANCHO.addListener) ANCHO.addListener(alAncho);
+}
 
 // Lee las listas de la planilla. En silencio, después de guardar, para que las ventas sin cobrar estén al día.
 function cargarListas(silencio) {
@@ -1033,7 +1089,9 @@ $('formulario').addEventListener('click', function (e) {
 function menu() {
   tipo = '';
   $('eleccion').hidden = false; $('elegido').hidden = true; $('formulario').hidden = true; $('pie').hidden = true;
+  armadas = [];
   $('formulario').replaceChildren();
+  $('formulario').className = '';
   $('estado').textContent = '';
   window.scrollTo(0, 0);
 }
@@ -1050,14 +1108,21 @@ function elegir(t) {
 }
 
 // Arma el formulario del tipo: la fecha, una tarjeta por grupo y las notas.
+// Las tarjetas principales van en la columna ancha de la computadora: las que tienen líneas o ventas para
+// elegir y, en los tipos sin líneas (Gasto, Horas, Movimientos de Cuentas), todas salvo la fecha y las notas.
 function armar() {
   comunes = { fecha: fecha(), notas: notas() };
   const grupos = TIPOS[tipo].grupos();
   campos = [].concat.apply([], grupos);
-  const tarjetas = [h('section', { class: 'tarjeta' }, comunes.fecha.nodo)]
-    .concat(grupos.map(function (g) { return h('section', { class: 'tarjeta' }, g.map(function (c) { return c.nodo; })); }))
-    .concat([h('section', { class: 'tarjeta' }, comunes.notas.nodo)]);
-  $('formulario').replaceChildren.apply($('formulario'), tarjetas);
+  const conLineas = function (g) { return g.some(function (c) { return c.nombre === 'lineas' || c.nombre === 'ventas'; }); };
+  const hayLineas = grupos.some(conLineas);
+  const tarjeta = function (nodos, principal) { return { nodo: h('section', { class: 'tarjeta' }, nodos), principal: !!principal }; };
+  armadas = [tarjeta(comunes.fecha.nodo)]
+    .concat(grupos.map(function (g) {
+      return tarjeta(g.map(function (c) { return c.nodo; }), hayLineas ? conLineas(g) : true);
+    }))
+    .concat([tarjeta(comunes.notas.nodo)]);
+  distribuir();
   $('estado').textContent = '';
 }
 
