@@ -264,6 +264,7 @@
 const API = window.CRETA_API || 'https://script.google.com/macros/s/AKfycbyqxV9P1K7bnvwqrgHlTgScak-RCV95IEi97HeCj6_LzaOHqHVEMiVk6xqiFNKq7kr6/exec';
 const CLAVE = leerClave();
 const OTRO = '__otro__';
+const OTRA = '__otra__';
 let D = null;
 let L = null;
 
@@ -854,35 +855,61 @@ const TIPOS = {
   gasto: {
     intro: 'Todo lo que sale: insumos, packaging, plataformas, impuestos y lo demás. El envío de una venta va en la venta.',
     grupos: function () {
-      const ventas = D.ventasMedida || [];
+      // Primero las ventas a medida abiertas (con saldo o de los últimos 30 días); «Otra venta» abre las de los
+      // últimos 120 días que no están arriba. Con el script de antes no llegan las abiertas: van las de 120 días.
+      const recientes = D.ventasMedida || [];
+      const abiertas = D.medidaAbiertas || recientes;
+      const arriba = {};
+      abiertas.forEach(function (v) { arriba[v.id] = true; });
+      const otras = D.medidaAbiertas ? recientes.filter(function (v) { return !arriba[v.id]; }) : [];
+      const opcion = function (v) { return [String(v.id), ['Venta ' + v.id, v.fecha, v.cliente, v.detalle].filter(String).join(' · ')]; };
       const ven = h('select', {});
-      llenar(ven, 'Elegí la venta', ventas.map(function (v) {
-        return [String(v.id), ['Venta ' + v.id, v.fecha, v.cliente, v.detalle].filter(String).join(' · ')];
-      }).concat([[OTRO, 'Todavía no la cargué']]));
-      const fv = marco('Para qué venta', ven, { ayuda: 'Las ventas con productos a medida. Si la venta todavía no está cargada, elegí «Todavía no la cargué» y después la atás desde la venta.' });
+      llenar(ven, 'Elegí la venta', abiertas.map(opcion)
+        .concat(otras.length ? [[OTRA, 'Otra venta']] : []).concat([[OTRO, 'Todavía no la cargué']]));
+      const fv = marco('Para qué venta', ven, { ayuda: (D.medidaAbiertas
+        ? 'Los trabajos a medida que falta cobrar y los de los últimos 30 días' + (otras.length ? '; los anteriores, en «Otra venta»' : '') + '.'
+        : 'Las ventas con productos a medida.') + ' Si la venta todavía no está cargada, elegí «Todavía no la cargué» y después la atás desde la venta.' });
       fv.nodo.hidden = true;
+      const otra = h('select', {});
+      llenar(otra, 'Elegí la venta', otras.map(opcion));
+      const fo = marco('Otra venta', otra, { ayuda: 'Las demás ventas a medida de los últimos 120 días.' });
+      fo.nodo.hidden = true;
       const detalle = texto('detalle', 'Detalle', { opcional: true, largo: 200, ayuda: 'Por ejemplo: «Telavendo: 3 m de gabardina».' });
       const campoVenta = {
         nombre: 'venta', nodo: fv.nodo, error: fv.error,
-        valor: function () { return fv.nodo.hidden || ven.value === OTRO ? '' : ven.value; },
-        validar: function () { return fv.error(!fv.nodo.hidden && !ven.value ? 'Elegí la venta.' : ''); },
+        valor: function () {
+          if (fv.nodo.hidden || ven.value === OTRO) return '';
+          return ven.value === OTRA ? otra.value : ven.value;
+        },
+        validar: function () {
+          const e = fv.error(!fv.nodo.hidden && !ven.value ? 'Elegí la venta.' : '');
+          return fo.error(!fo.nodo.hidden && !otra.value ? 'Elegí la venta.' : '') || e;
+        },
+      };
+      // El segundo desplegable: no se manda solo, su valor va en «venta».
+      const campoOtra = { nombre: 'otraVenta', nodo: fo.nodo, error: fo.error, valor: function () { return undefined; }, validar: function () { return ''; } };
+      const mostrarOtra = function (si) {
+        fo.nodo.hidden = !si;
+        if (!si) { otra.value = ''; fo.error(''); }
       };
       ven.addEventListener('change', function () {
         fv.error(''); detalle.error('');
+        mostrarOtra(ven.value === OTRA);
         detalle.ayuda(ven.value === OTRO ? 'El trabajo y lo que compraste. Por ejemplo: «Cortinas de Analía: 8 m de lino».'
           : 'Lo que compraste, si querés. Por ejemplo: «8 m de lino».');
       });
+      otra.addEventListener('change', function () { fo.error(''); });
       const tipoGasto = chips('tipoGasto', 'Tipo', L.tiposGasto, {
         alCambiar: function (t, m) {
           m.ayuda((L.ayudaGastos && L.ayudaGastos[t]) || '');
           const am = t === L.compraMedida;
           fv.nodo.hidden = !am;
-          if (!am) { ven.value = ''; fv.error(''); }
+          if (!am) { ven.value = ''; fv.error(''); mostrarOtra(false); }
           detalle.ayuda(am ? 'Lo que compraste, si querés. Por ejemplo: «8 m de lino».' : 'Por ejemplo: «Telavendo: 3 m de gabardina».');
         },
       });
       return [
-        [tipoGasto, campoVenta, detalle],
+        [tipoGasto, campoVenta, campoOtra, detalle],
         [
           plata('montoNeto', 'Monto'),
           chips('cuenta', 'De dónde salió la plata', L.cuentas, { inicial: L.cuentas[0] }),
@@ -1199,7 +1226,7 @@ function mostrarConsulta() {
   const mes = nombreMes(C.mes);
   let vista;
   if (consulta === 'venta') {
-    vista = verCobros ? vistaCobros(C.cobros || [], mes) : vistaVentas(C.ventas || [], mes);
+    vista = verCobros ? vistaCobros(C.cobros || [], mes) : vistaVentas(C.ventas || [], mes, C.anteriores || []);
     const que = chips('que', 'Qué ves', ['Ventas', 'Cobros'], {
       inicial: verCobros ? 'Cobros' : 'Ventas',
       alCambiar: function (op) { verCobros = op === 'Cobros'; mostrarConsulta(); },
@@ -1215,7 +1242,8 @@ function mostrarConsulta() {
     h('div', { class: 'lado' }, vista.lado),
     h('div', { class: 'principal' }, vista.items.length
       ? h('div', { class: 'items' }, vista.items)
-      : h('section', { class: 'tarjeta' }, h('p', { class: 'vacio' }, vista.vacio)))));
+      : h('section', { class: 'tarjeta' }, h('p', { class: 'vacio' }, vista.vacio)),
+      vista.extra || null)));
 }
 
 // datos: [[etiqueta, valor]].
@@ -1240,35 +1268,44 @@ function card(o) {
 }
 function juntar(l) { return l.filter(Boolean).join(' · '); }
 
-function vistaVentas(l, mes) {
+// Falta cobrar suma lo que falta de las ventas del mes y de las de meses anteriores que todavía tienen saldo,
+// que van después de las del mes.
+function vistaVentas(l, mes, anteriores) {
+  const falta = function (v) { return v.saldo > 0.005 ? v.saldo : 0; };
   const datos = [
     ['Ventas', String(l.length)],
     ['Neto', pesos(sumar(l, function (v) { return v.neto; }))],
-    ['Falta cobrar', pesos(sumar(l, function (v) { return v.saldo > 0.005 ? v.saldo : 0; }))],
+    ['Falta cobrar', pesos(r2(sumar(l, falta) + sumar(anteriores, falta)))],
   ];
   return {
     intro: 'Las ventas de ' + mes + ', de la más nueva a la más vieja. El monto de cada una es el neto.',
     vacio: 'No hay ventas cargadas en ' + mes + '.',
     lado: [resumen(datos)],
-    items: l.map(function (v) {
-      const neto = v.neto || 0, cobrado = v.cobrado || 0;
-      let estado;
-      if (v.saldo > 0.005) estado = [cobrado > 0.005 ? 'Falta ' + pesos(r2(v.saldo)) + ' (cobraste ' + pesos(r2(cobrado)) + ')' : 'Sin cobrar', 'falta'];
-      else if (v.saldada && cobrado < neto - 0.005) estado = ['Saldada: no pagó ' + pesos(r2(neto - cobrado)), 'falta'];
-      else estado = ['Cobrada', 'ok'];
-      return card({
-        titulo: 'Venta ' + v.id, monto: neto,
-        sub: juntar([v.fecha, v.canal, v.cliente]),
-        cuerpo: [
-          h('ul', { class: 'item-prod' }, (v.productos || []).map(function (p) {
-            return h('li', {}, (p.q > 1 ? p.q + ' × ' : '') + juntar([p.n, p.d, p.c]));
-          })),
-          v.bruto ? h('p', { class: 'item-sub' }, 'Pagó ' + pesos(r2(v.bruto)) + (v.envio ? ' · envío ' + pesos(r2(v.envio)) : '')) : null,
-        ],
-        etiquetas: [estado],
-      });
-    }),
+    items: l.map(cardVenta),
+    extra: anteriores.length ? [
+      h('span', { class: 'titulo-menu titulo-segundo' }, 'De meses anteriores, sin cobrar'),
+      h('div', { class: 'items' }, anteriores.map(cardVenta)),
+    ] : null,
   };
+}
+
+function cardVenta(v) {
+  const neto = v.neto || 0, cobrado = v.cobrado || 0;
+  let estado;
+  if (v.saldo > 0.005) estado = [cobrado > 0.005 ? 'Falta ' + pesos(r2(v.saldo)) + ' (cobraste ' + pesos(r2(cobrado)) + ')' : 'Sin cobrar', 'falta'];
+  else if (v.saldada && cobrado < neto - 0.005) estado = ['Saldada: no pagó ' + pesos(r2(neto - cobrado)), 'falta'];
+  else estado = ['Cobrada', 'ok'];
+  return card({
+    titulo: 'Venta ' + v.id, monto: neto,
+    sub: juntar([v.fecha, v.canal, v.cliente]),
+    cuerpo: [
+      h('ul', { class: 'item-prod' }, (v.productos || []).map(function (p) {
+        return h('li', {}, (p.q > 1 ? p.q + ' × ' : '') + juntar([p.n, p.d, p.c]));
+      })),
+      v.bruto ? h('p', { class: 'item-sub' }, 'Pagó ' + pesos(r2(v.bruto)) + (v.envio ? ' · envío ' + pesos(r2(v.envio)) : '')) : null,
+    ],
+    etiquetas: [estado],
+  });
 }
 
 function vistaCobros(l, mes) {
