@@ -257,7 +257,6 @@
       <strong id="tipoTitulo"></strong>
       <button type="button" class="enlace" id="volver">Volver</button>
     </div>
-    <p class="intro" id="tipoIntro"></p>
     <div id="filtroMes" hidden></div>
   </section>
   <div id="formulario" hidden></div>
@@ -739,7 +738,6 @@ function queCargas(actual) {
 
 const TIPOS = {
   venta: {
-    intro: 'Una carga por pedido. Lo que te paguen después de una venta también se carga acá, como cobro.',
     grupos: function () {
       let netoManual = false;
       let cobradoManual = false;
@@ -750,7 +748,7 @@ const TIPOS = {
         ayuda: 'Lo que ya te pagaron. Si fue una seña, la seña; si todavía nada, 0. Lo que falta lo cargás después como cobro.',
         alEscribir: function () { cobradoManual = true; verCuenta(); },
       });
-      const cuenta = chips('cuenta', 'Dónde entró la plata', L.cuentasCobro, { inicial: L.cuentasCobro[0] });
+      const cuenta = chips('cuenta', 'Dónde entró el dinero', L.cuentasCobro, { inicial: L.cuentasCobro[0] });
       const canal = chips('canal', 'Canal', L.canales, {
         alCambiar: function (c, m) {
           const plataforma = cuentaDelCanal(c);
@@ -818,7 +816,6 @@ const TIPOS = {
     },
   },
   cobro: {
-    intro: 'Lo que te pagan de una venta que no se cobró del todo: una seña o el saldo.',
     grupos: function () {
       let saldo = 0;
       let manual = false;
@@ -851,7 +848,7 @@ const TIPOS = {
       return [
         [queCargas('cobro')],
         [ventas],
-        [monto, resto, chips('cuenta', 'Dónde entró la plata', L.cuentasCobro, { inicial: L.cuentasCobro[0] })],
+        [monto, resto, chips('cuenta', 'Dónde entró el dinero', L.cuentasCobro, { inicial: L.cuentasCobro[0] })],
       ];
     },
     cruzar: function (v) {
@@ -865,7 +862,6 @@ const TIPOS = {
     },
   },
   gasto: {
-    intro: 'Todo lo que sale: insumos, packaging, plataformas, impuestos y lo demás. El envío de una venta va en la venta.',
     grupos: function () {
       // Primero las ventas a medida abiertas (con saldo o de los últimos 30 días); «Otra venta» abre las de los
       // últimos 120 días que no están arriba. Con el script de antes no llegan las abiertas: van las de 120 días.
@@ -924,7 +920,7 @@ const TIPOS = {
         [tipoGasto, campoVenta, campoOtra, detalle],
         [
           plata('montoNeto', 'Monto'),
-          chips('cuenta', 'De dónde salió la plata', L.cuentas, { inicial: L.cuentas[0] }),
+          chips('cuenta', 'De dónde salió el dinero', L.cuentas, { inicial: L.cuentas[0] }),
         ],
       ];
     },
@@ -936,11 +932,10 @@ const TIPOS = {
     resumen: function (v) { return v.tipoGasto + ' · ' + pesos(numero(v.montoNeto)); },
   },
   cuentas: {
-    intro: 'Pases entre cuentas el día que pasan, como lo que libera Mercado Libre o lo que retirás de la tienda; retiros para vos y aportes de plata tuya.',
     grupos: function () {
       return [[
-        chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio. Lo que libera Mercado Libre sale de Mercado Libre, y lo que retirás de la tienda, de Pago Nube.' }),
-        chips('hacia', 'Hacia', L.cuentas.concat([L.retiro]), { ayuda: 'Retiro: plata del negocio que sacás para vos.' }),
+        chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: dinero tuyo que entra al negocio. Lo que libera Mercado Libre sale de Mercado Libre, y lo que retirás de la tienda, de Pago Nube.' }),
+        chips('hacia', 'Hacia', L.cuentas.concat([L.retiro]), { ayuda: 'Retiro: dinero del negocio que sacás para vos.' }),
         plata('montoNeto', 'Monto'),
       ]];
     },
@@ -1062,7 +1057,6 @@ function elegir(t, mismoBoton) {
   tipo = t.codigo;
   codigo = nuevoCodigo();
   if (!mismoBoton) $('tipoTitulo').textContent = t.codigo === 'cobro' ? 'Venta' : t.nombre;
-  $('tipoIntro').textContent = TIPOS[tipo].intro;
   consulta = '';
   $('consulta').hidden = true;
   $('filtroMes').hidden = true;
@@ -1270,7 +1264,6 @@ function mostrarConsulta() {
   } else {
     vista = vistaCuentas(C.cuentas || [], mes);
   }
-  $('tipoIntro').textContent = vista.intro;
   $('consulta').replaceChildren(h('div', { class: 'consulta-cols' },
     h('div', { class: 'lado' }, vista.lado),
     h('div', { class: 'principal' }, vista.items.length
@@ -1311,7 +1304,6 @@ function vistaVentas(l, mes, anteriores) {
     ['Falta cobrar', pesos(r2(sumar(l, falta) + sumar(anteriores, falta)))],
   ];
   return {
-    intro: 'Las ventas de ' + mes + ', de la más nueva a la más vieja. El monto de cada una es el neto.',
     vacio: 'No hay ventas cargadas en ' + mes + '.',
     lado: [resumen(datos)],
     items: l.map(cardVenta),
@@ -1343,7 +1335,6 @@ function cardVenta(v) {
 
 function vistaCobros(l, mes) {
   return {
-    intro: 'Los cobros de ' + mes + ': lo que te pagaron después de vender (señas y saldos), del más nuevo al más viejo.',
     vacio: 'No hay cobros cargados en ' + mes + '.',
     lado: [resumen([['Cobros', String(l.length)], ['Total', pesos(sumar(l, function (c) { return c.monto; }))]])],
     items: l.map(function (c) {
@@ -1360,7 +1351,6 @@ function vistaCobros(l, mes) {
 
 function vistaGastos(l, mes) {
   return {
-    intro: 'Los gastos de ' + mes + ', del más nuevo al más viejo.',
     vacio: 'No hay gastos cargados en ' + mes + '.',
     lado: [resumen([['Gastos', String(l.length)], ['Total', pesos(sumar(l, function (g) { return g.monto; }))]])],
     items: l.map(function (g) {
@@ -1383,11 +1373,10 @@ function vistaResumen(c, mes) {
   const entro = sumar(c.ingresos, monto), salio = sumar(c.egresos, monto);
   const lista = verEgresos ? c.egresos : c.ingresos;
   return {
-    intro: 'Con qué saldo empezó y terminó ' + mes + ', y lo que entró y salió, de lo más nuevo a lo más viejo.',
-    vacio: verEgresos ? 'No salió plata en ' + mes + '.' : 'No entró plata en ' + mes + '.',
+    vacio: verEgresos ? 'No salió dinero en ' + mes + '.' : 'No entró dinero en ' + mes + '.',
     lado: [h('section', { class: 'tarjeta' }, h('div', { class: 'resumen-caja' }, [
-      ['Saldo al empezar el mes', c.inicial, ''],
-      ['Saldo al terminar el mes', r2(c.inicial + entro - salio), ''],
+      ['Saldo al inicio', c.inicial, ''],
+      ['Saldo al terminar', r2(c.inicial + entro - salio), ''],
       ['Entró', entro, ' entro'],
       ['Salió', salio, ' salio'],
     ].map(function (d) {
@@ -1413,7 +1402,6 @@ function vistaCuentas(l, mes) {
   const aportes = l.filter(function (c) { return c.desde === L.aporte && !c.concepto; });
   const retiros = l.filter(function (c) { return c.hacia === L.retiro; });
   return {
-    intro: 'Los movimientos de Cuentas de ' + mes + ' (pases, aportes y retiros), del más nuevo al más viejo.',
     vacio: 'No hay movimientos de Cuentas en ' + mes + '.',
     lado: [resumen([
       ['Movimientos', String(l.length)],
