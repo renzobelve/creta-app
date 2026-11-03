@@ -109,10 +109,6 @@
     background: transparent; color: var(--bordo); font: inherit; font-weight: 600;
   }
   .dos { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  /* Lo que lleva un kit: tarjetas dentro de la tarjeta del kit. */
-  .linea .linea { background: #fff; padding: 10px; }
-  .linea .campo.partes { border-top: 1px solid var(--linea); padding-top: 14px; margin-top: 4px; }
-  .ayuda.arriba { margin: -2px 0 10px; }
 
   .pasos { display: flex; gap: 8px; align-items: stretch; }
   .paso {
@@ -163,10 +159,10 @@
     .columna { min-width: 0; }
     .columna > .tarjeta:last-child { margin-bottom: 0; }
     /* Cada línea a todo el ancho, con sus campos de a dos (Categoría y Producto, Color y Unidades);
-       el encabezado y las partes de un kit, a lo ancho. */
+       el encabezado y «Qué es», a lo ancho. */
     .columnas .linea { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 14px; row-gap: 14px; }
     .columnas .linea > .campo { margin-bottom: 0; }
-    .columnas .linea > .linea-cab, .columnas .linea > .partes { grid-column: 1 / -1; }
+    .columnas .linea > .linea-cab, .columnas .linea > .linea-cab + .campo { grid-column: 1 / -1; }
     .columnas .linea > .linea-cab { margin-bottom: -4px; }
     .columnas .ventas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
     .pie { padding: 12px 24px; }
@@ -296,9 +292,6 @@ function pesos(n) {
 }
 function aTexto(n) { return String(Math.round(n * 100) / 100).replace('.', ','); }
 function plural(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
-function lista(items) {
-  return items.length < 2 ? items.join('') : items.slice(0, -1).join(', ') + ' y ' + items[items.length - 1];
-}
 function nuevoCodigo() {
   const a = new Uint8Array(10);
   if (window.crypto && crypto.getRandomValues) crypto.getRandomValues(a);
@@ -318,13 +311,6 @@ function coloresProducto(p) {
   const suyos = todos.filter(function (c) { return palabras.indexOf(c.split(' ')[0]) > -1; });
   return suyos.length ? suyos : todos;
 }
-// Una venta a medida en la lista de la compra: «Venta 9 · 15/10 · Analía · Trabajo a medida».
-function textoVenta(v) {
-  return ['Venta ' + v.id, v.fecha, v.cliente, v.detalle].filter(String).join(' · ');
-}
-function esMedida(nombre) {
-  return D.productos.some(function (p) { return p.n === nombre && p.m; });
-}
 function llenar(sel, primera, opciones) {
   sel.textContent = '';
   if (primera) sel.append(h('option', { value: '' }, primera));
@@ -333,6 +319,8 @@ function llenar(sel, primera, opciones) {
     sel.append(h('option', { value: par[0] }, par[1]));
   });
 }
+// La cuenta a la que entra lo cobrado en un canal de plataforma (Mercado Libre, la tienda), o '' si se elige.
+function cuentaDelCanal(canal) { return (L.cuentaCanal && L.cuentaCanal[canal]) || ''; }
 
 // ---------- Validaciones (las mismas del servidor) ----------
 
@@ -344,17 +332,10 @@ function errPlata(s, obligatorio) {
   if (!/^[0-9]+(,[0-9]{1,2})?$/.test(s)) return 'Solo números. Los centavos van con coma: 45231,50.';
   return '';
 }
-function errCantidad(s) {
-  s = String(s).trim();
-  if (!s) return 'Falta la cantidad.';
-  if (s.indexOf('.') > -1) return 'Sin puntos. Los decimales van con coma: 2,5.';
-  if (!/^[0-9]+(,[0-9]+)?$/.test(s)) return 'Solo números. Los decimales van con coma: 2,5.';
-  if (!(numero(s) > 0)) return 'Tiene que ser mayor que cero.';
-  return '';
-}
 
 // ---------- Campos ----------
 // Cada campo devuelve { nombre, nodo, valor(), validar(), error(msj) }; validar() marca el error y lo devuelve.
+// Un campo oculto no se valida ni se manda, y al ocultarse se vacía.
 
 let ids = 0;
 function marco(etiqueta, control, o) {
@@ -374,9 +355,10 @@ function marco(etiqueta, control, o) {
   };
 }
 
+// o.inicial: la opción con que arranca y a la que vuelve al mostrarse de nuevo.
 function chips(nombre, etiqueta, opciones, o) {
   o = o || {};
-  let elegido = '';
+  let elegido = o.inicial || '';
   const botones = opciones.map(function (op) {
     return h('button', { type: 'button', class: 'chip', 'aria-pressed': 'false', onclick: function () { elegir(op); } }, op);
   });
@@ -388,12 +370,18 @@ function chips(nombre, etiqueta, opciones, o) {
     m.error('');
     if (o.alCambiar) o.alCambiar(elegido, m);
   }
-  // Un campo oculto no se valida ni se manda; al ocultarlo se borra lo elegido.
+  marcar();
   return {
-    nombre: nombre, nodo: m.nodo, error: m.error,
+    nombre: nombre, nodo: m.nodo, error: m.error, ayuda: m.ayuda,
     valor: function () { return m.nodo.hidden ? '' : elegido; },
     validar: function () { return m.error(!m.nodo.hidden && !elegido && !o.opcional ? 'Elegí una opción.' : ''); },
-    mostrar: function (si) { m.nodo.hidden = !si; if (!si) { elegido = ''; marcar(); m.error(''); } },
+    poner: function (op) { elegido = op; marcar(); m.error(''); },
+    mostrar: function (si) {
+      if (si === !m.nodo.hidden) return;
+      m.nodo.hidden = !si;
+      elegido = si ? (o.inicial || '') : '';
+      marcar(); m.error('');
+    },
   };
 }
 
@@ -408,13 +396,17 @@ function plata(nombre, etiqueta, o) {
     verVista();
     if (o.alEscribir) o.alEscribir(input.value);
   });
-  // Un campo oculto no se valida ni se manda; al ocultarlo se vacía.
   return {
     nombre: nombre, nodo: m.nodo, error: m.error, ayuda: m.ayuda,
     valor: function () { return m.nodo.hidden ? '' : input.value.trim(); },
     poner: function (v) { input.value = v; verVista(); m.error(''); },
     validar: function () { return m.error(m.nodo.hidden ? '' : errPlata(input.value, !o.opcional)); },
-    mostrar: function (si) { m.nodo.hidden = !si; if (!si) { input.value = ''; verVista(); m.error(''); } },
+    mostrar: function (si) {
+      if (si === !m.nodo.hidden) return;
+      m.nodo.hidden = !si;
+      if (!si) { input.value = ''; verVista(); m.error(''); }
+    },
+    visible: function () { return !m.nodo.hidden; },
   };
 }
 
@@ -424,14 +416,14 @@ function casilla(nombre, etiqueta, detalle, alCambiar) {
   const nodo = h('div', { class: 'campo' },
     h('label', { class: 'venta' }, chk,
       h('span', { class: 'venta-texto' }, h('span', { class: 'venta-cab' }, etiqueta), h('span', { class: 'venta-det' }, detalle))));
-  chk.addEventListener('change', function () { alCambiar(chk.checked); });
+  chk.addEventListener('change', function () { if (alCambiar) alCambiar(chk.checked); });
   return {
     nombre: nombre, nodo: nodo, error: function () { return ''; },
     valor: function () { return !nodo.hidden && chk.checked; },
     validar: function () { return ''; },
     mostrar: function (si) {
       nodo.hidden = !si;
-      if (!si && chk.checked) { chk.checked = false; alCambiar(false); }
+      if (!si && chk.checked) { chk.checked = false; if (alCambiar) alCambiar(false); }
     },
   };
 }
@@ -439,17 +431,13 @@ function casilla(nombre, etiqueta, detalle, alCambiar) {
 function texto(nombre, etiqueta, o) {
   o = o || {};
   const input = h('input', { type: 'text', autocomplete: 'off', maxlength: o.largo || 120, placeholder: o.placeholder, enterkeyhint: 'next' });
-  let datalist = null;
-  if (o.sugerencias && o.sugerencias.length) {
-    datalist = h('datalist', { id: 'dl' + (++ids) }, o.sugerencias.map(function (s) { return h('option', { value: s }); }));
-    input.setAttribute('list', datalist.id);
-  }
-  const m = marco(etiqueta, input, Object.assign({ extra: datalist }, o));
+  const m = marco(etiqueta, input, o);
   input.addEventListener('input', function () { m.error(''); });
   return {
-    nombre: nombre, nodo: m.nodo, error: m.error,
-    valor: function () { return input.value.trim(); },
-    validar: function () { return m.error(!o.opcional && !input.value.trim() ? 'Falta completarlo.' : ''); },
+    nombre: nombre, nodo: m.nodo, error: m.error, ayuda: m.ayuda, input: input,
+    valor: function () { return m.nodo.hidden ? '' : input.value.trim(); },
+    validar: function () { return m.error(!m.nodo.hidden && !o.opcional && !input.value.trim() ? 'Falta completarlo.' : ''); },
+    mostrar: function (si) { m.nodo.hidden = !si; if (!si) { input.value = ''; m.error(''); } },
   };
 }
 
@@ -473,28 +461,6 @@ function fecha() {
     validar: function () {
       if (!input.value) return m.error('Falta la fecha.');
       return m.error(input.value > hoy() ? 'La fecha no puede ser posterior a hoy.' : '');
-    },
-  };
-}
-
-function duracion() {
-  const horas = h('input', { type: 'text', inputmode: 'numeric', placeholder: '0', maxlength: 2, 'aria-label': 'Horas' });
-  const minutos = h('input', { type: 'text', inputmode: 'numeric', placeholder: '0', maxlength: 2, 'aria-label': 'Minutos' });
-  const caja = h('div', { class: 'dos' },
-    h('div', {}, h('span', { class: 'ayuda' }, 'Horas'), horas),
-    h('div', {}, h('span', { class: 'ayuda' }, 'Minutos'), minutos));
-  const m = marco('Duración', caja, { grupo: true });
-  [horas, minutos].forEach(function (i) { i.addEventListener('input', function () { m.error(''); }); });
-  return {
-    nombre: 'duracion', nodo: m.nodo, error: m.error,
-    valor: function () { return { horas: horas.value.trim(), minutos: minutos.value.trim() }; },
-    validar: function () {
-      const hs = horas.value.trim(), ms = minutos.value.trim();
-      if ((hs && !/^[0-9]+$/.test(hs)) || (ms && !/^[0-9]+$/.test(ms))) return m.error('Solo números enteros.');
-      const total = Number(hs || 0) * 60 + Number(ms || 0);
-      if (Number(ms || 0) > 59) return m.error('Los minutos van de 0 a 59.');
-      if (total < 1) return m.error('Falta la duración.');
-      return m.error(total > 1440 ? 'No puede pasar de 24 horas.' : '');
     },
   };
 }
@@ -532,56 +498,51 @@ function color() {
   const valor = function () { return modo === 'lista' && sel.value !== OTRO ? sel.value : txt.value.trim(); };
   return {
     nodo: m.nodo, poner: poner, valor: valor, error: m.error,
-    mostrar: function (si) { m.nodo.hidden = !si; },
     validar: function () {
-      if (m.nodo.hidden) return m.error('');
-      if (modo === 'nada') return m.error('');
+      if (m.nodo.hidden || modo === 'nada') return m.error('');
       return m.error(valor() ? '' : 'Falta el color.');
     },
   };
 }
 
-// Un producto: categoría, producto, color y unidades.
-// o.kits: también los kits, que en vez de color piden lo que llevan (solo en la venta).
-// o.inicial y o.cantidad: el producto y las unidades con que arranca (las partes de un kit, desde su receta).
-// o.unidades: el título de las unidades.
-// o.armado: solo los almohadones que se arman con su funda (motivo Armado de Almohadón).
-function lineaProducto(o) {
-  o = o || {};
-  const lista = D.productos.filter(function (p) { return o.armado ? !!p.a : (o.kits || !p.k); });
+// Las unidades, con un paso de − y +.
+function unidades(etiqueta) {
+  const uni = h('input', { type: 'text', inputmode: 'numeric', value: '1', maxlength: 3 });
+  const paso = function (d) { uni.value = String(Math.max(1, (parseInt(uni.value, 10) || 0) + d)); m.error(''); };
+  const m = marco(etiqueta || 'Unidades', h('div', { class: 'pasos' },
+    h('button', { type: 'button', class: 'paso', 'aria-label': 'Una menos', onclick: function () { paso(-1); } }, '−'),
+    uni,
+    h('button', { type: 'button', class: 'paso', 'aria-label': 'Una más', onclick: function () { paso(1); } }, '+')), { grupo: true });
+  uni.addEventListener('input', function () { m.error(''); });
+  return {
+    nodo: m.nodo,
+    valor: function () { return uni.value.trim(); },
+    validar: function () { return m.error(/^[1-9][0-9]{0,2}$/.test(uni.value.trim()) ? '' : 'Un número entero: 1, 2, 3…'); },
+  };
+}
+
+// Un producto de la venta: de catálogo (categoría, producto, color y unidades) o a medida (el producto a medida,
+// qué es el trabajo, el color si lo tiene y las unidades).
+function lineaVenta() {
+  const medidas = D.productos.filter(function (p) { return p.m; });
+  const lista = D.productos.filter(function (p) { return !p.m; });
+  const clase = chips('clase', 'Qué es', ['De catálogo', 'A medida'], {
+    inicial: 'De catálogo',
+    alCambiar: function (c) { verClase(c); },
+  });
+
+  // De catálogo.
   const cats = unicos(lista.map(function (p) { return p.c; }));
   const cat = h('select', {});
   llenar(cat, 'Elegí la categoría', cats);
   const prod = h('select', { disabled: true });
   llenar(prod, 'Primero elegí la categoría', []);
   const col = color();
-  const uni = h('input', { type: 'text', inputmode: 'numeric', value: String(o.cantidad || 1), maxlength: 3 });
-  const paso = function (d) { uni.value = String(Math.max(1, (parseInt(uni.value, 10) || 0) + d)); fu.error(''); };
   const fc = marco('Categoría', cat), fp = marco('Producto', prod);
-  const fu = marco(o.unidades || 'Unidades', h('div', { class: 'pasos' },
-    h('button', { type: 'button', class: 'paso', 'aria-label': 'Una menos', onclick: function () { paso(-1); } }, '−'),
-    uni,
-    h('button', { type: 'button', class: 'paso', 'aria-label': 'Una más', onclick: function () { paso(1); } }, '+')), { grupo: true });
-  // Lo que lleva un kit: una tarjeta por producto, con la receta como punto de partida.
-  const partes = o.kits ? bloque('Qué lleva cada kit', 'Parte', 'Agregar otro producto al kit', function (d) {
-    return lineaProducto({ inicial: d && d.n, cantidad: d && d.q, unidades: 'Unidades por kit' });
-  }, 'Sale de la receta. Cambiá el diseño o el producto si hace falta y elegí el color de cada uno.') : null;
-  if (partes) { partes.nodo.classList.add('partes'); partes.nodo.hidden = true; }
-  const ponerPartes = function (contenido) {
-    if (!partes) return;
-    partes.vaciar();
-    partes.nodo.hidden = !contenido;
-    if (contenido) (contenido.length ? contenido : [null]).forEach(function (d) { partes.nueva(d, false); });
-  };
   const elegido = function () { return lista.filter(function (p) { return p.n === prod.value; })[0]; };
-  const esKit = function () { const p = elegido(); return !!(p && p.k); };
   const alProducto = function () {
     const p = elegido();
-    if (o.armado) fp.ayuda(p ? 'Sale del stock la ' + p.a + ', del mismo color.' : '');
-    col.mostrar(!(p && p.k));
-    if (!p) { ponerPartes(null); return col.poner(undefined); }
-    if (p.k) { col.poner(undefined); return ponerPartes((D.kits && D.kits[p.n]) || []); }
-    ponerPartes(null);
+    if (!p) return col.poner(undefined);
     col.poner(coloresProducto(p), p.t === 'Varias' ? 'Colores o contenido' : '');
   };
   const alCategoria = function () {
@@ -593,228 +554,123 @@ function lineaProducto(o) {
   };
   cat.addEventListener('change', alCategoria);
   prod.addEventListener('change', function () { fp.error(''); alProducto(); });
-  uni.addEventListener('input', function () { fu.error(''); });
-  const inicial = o.inicial && lista.filter(function (p) { return p.n === o.inicial; })[0];
-  if (inicial) { cat.value = inicial.c; alCategoria(); prod.value = inicial.n; alProducto(); }
-  else if (cats.length === 1) { cat.value = cats[0]; alCategoria(); }
+
+  // A medida.
+  const med = h('select', {});
+  llenar(med, medidas.length === 1 ? null : 'Elegí el producto', medidas.map(function (p) { return p.n; }));
+  const fm = marco('Producto a medida', med);
+  med.addEventListener('change', function () { fm.error(''); });
+  const det = texto('detalle', 'Qué es el trabajo', { largo: 200, ayuda: 'Por ejemplo: «Cortinas de lino, 2 paños de 1,40 x 2,20».' });
+  const colMedida = texto('color', 'Color o tela', { opcional: true, largo: 80 });
+
+  const uni = unidades();
+  const verClase = function (c) {
+    const am = c === 'A medida';
+    [fc.nodo, fp.nodo, col.nodo].forEach(function (n) { n.hidden = am; });
+    [fm.nodo].forEach(function (n) { n.hidden = !am; });
+    det.mostrar(am); colMedida.mostrar(am);
+  };
+  verClase('De catálogo');
+  if (!medidas.length) clase.nodo.hidden = true;
+  if (cats.length === 1) { cat.value = cats[0]; alCategoria(); }
+
+  const esMedida = function () { return clase.valor() === 'A medida'; };
   return {
-    nodo: [fc.nodo, fp.nodo, col.nodo, fu.nodo].concat(partes ? [partes.nodo] : []),
+    nodo: [clase.nodo, fc.nodo, fp.nodo, col.nodo, fm.nodo, det.nodo, colMedida.nodo, uni.nodo],
+    esMedida: esMedida,
     valor: function () {
-      const v = { producto: prod.value, color: esKit() ? '' : col.valor(), cantidad: uni.value.trim() };
-      if (esKit()) v.partes = partes.valor();
-      return v;
+      if (esMedida()) return { tipo: 'medida', producto: med.value, detalle: det.valor(), color: colMedida.valor(), cantidad: uni.valor() };
+      return { tipo: 'catalogo', producto: prod.value, color: col.valor(), cantidad: uni.valor() };
     },
     validar: function () {
-      const e = [
-        fc.error(cat.value ? '' : 'Elegí la categoría.'),
-        fp.error(cat.value && !prod.value ? 'Elegí el producto.' : ''),
-        col.validar(),
-        fu.error(/^[1-9][0-9]{0,2}$/.test(uni.value.trim()) ? '' : 'Un número entero: 1, 2, 3…'),
-        esKit() ? partes.validar() : '',
-      ];
+      const e = esMedida()
+        ? [fm.error(med.value ? '' : 'Elegí el producto.'), det.validar(), uni.validar()]
+        : [fc.error(cat.value ? '' : 'Elegí la categoría.'), fp.error(cat.value && !prod.value ? 'Elegí el producto.' : ''), col.validar(), uni.validar()];
       return e.filter(String)[0] || '';
     },
-    enfocar: function () { cat.focus(); },
+    enfocar: function () { (esMedida() ? med : cat).focus(); },
   };
 }
 
-function lineaInsumo() {
-  const tipo = h('select', {});
-  llenar(tipo, 'Elegí el tipo', unicos(D.insumos.map(function (i) { return i.t; })));
-  const ins = h('select', { disabled: true });
-  llenar(ins, 'Primero elegí el tipo', []);
-  const col = color();
-  col.mostrar(false);
-  const cant = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off' });
-  const det = h('input', { type: 'text', autocomplete: 'off', maxlength: 200 });
-  const ft = marco('Tipo de insumo', tipo), fi = marco('Insumo', ins), fq = marco('Cantidad', cant);
-  // Lo que se compra para un trabajo a medida va sin color ni cantidad: se elige la venta del trabajo
-  // (o se escribe el trabajo, si la venta no está cargada) y alcanza con el monto.
-  const ventas = D.ventasMedida || [];
-  const ven = h('select', {});
-  llenar(ven, 'Elegí la venta', ventas.map(function (v) { return [String(v.id), textoVenta(v)]; }).concat([[OTRO, 'Otro trabajo: escribirlo']]));
-  const fv = marco('Para qué venta', ven, { ayuda: 'Las ventas con productos a medida. Si la venta todavía no está cargada, elegí «Otro trabajo».' });
-  fv.nodo.hidden = true;
-  const fd = marco('Detalle', det);
-  fd.nodo.hidden = true;
-  const monto = plata('monto', 'Monto', { ayuda: 'Lo que pagaste por este insumo, sin el envío.' });
-  const elegido = function () { return D.insumos.filter(function (i) { return i.n === ins.value; })[0]; };
-  const aMedida = function () { const i = elegido(); return !!(i && i.t === (L.aMedida || 'A medida')); };
-  const ventaElegida = function () { return ventas.filter(function (v) { return String(v.id) === ven.value; })[0]; };
-  const alVenta = function () {
-    const otro = ven.value === OTRO;
-    fd.ayuda(otro ? 'El trabajo y lo que compraste. Por ejemplo: «Cortinas de Analía: 8 m de lino».'
-      : 'Lo que compraste, si querés. Por ejemplo: «8 m de lino».');
-    fv.error(''); fd.error('');
-  };
-  const alInsumo = function () {
-    const i = elegido();
-    const am = aMedida();
-    col.mostrar(!!(i && i.l) && !am);
-    col.poner(i && i.l && !am ? (D.colores[i.l] || []) : undefined);
-    fq.nodo.hidden = am;
-    fv.nodo.hidden = !am;
-    fd.nodo.hidden = !am;
-    if (!am) { ven.value = ''; det.value = ''; }
-    fq.error('');
-    alVenta();
-    fq.ayuda(i ? (i.u === 'Metros' ? 'En metros.' : 'En unidades.') : '');
-  };
-  ven.addEventListener('change', alVenta);
-  det.addEventListener('input', function () { fd.error(''); });
-  tipo.addEventListener('change', function () {
-    const lista = D.insumos.filter(function (i) { return i.t === tipo.value; }).map(function (i) { return i.n; });
-    llenar(ins, lista.length === 1 ? null : (tipo.value ? 'Elegí el insumo' : 'Primero elegí el tipo'), lista);
-    ins.disabled = !tipo.value;
-    ft.error(''); fi.error('');
-    alInsumo();
-  });
-  ins.addEventListener('change', function () { fi.error(''); alInsumo(); });
-  cant.addEventListener('input', function () { fq.error(''); });
-  return {
-    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo, fv.nodo, fd.nodo, monto.nodo],
-    valor: function () {
-      const am = aMedida();
-      const v = am ? ventaElegida() : null;
-      const d = det.value.trim();
-      // Con venta, el Detalle va igual (lo escrito o la venta), por si el script publicado todavía lo pide.
-      return {
-        insumo: ins.value, color: am ? '' : col.valor(), cantidad: am ? '' : cant.value.trim(),
-        venta: v ? String(v.id) : '', detalle: am ? (d || (v ? textoVenta(v) : '')) : '', monto: monto.valor(),
-      };
-    },
-    validar: function () {
-      const am = aMedida();
-      const e = [
-        ft.error(tipo.value ? '' : 'Elegí el tipo.'),
-        fi.error(tipo.value && !ins.value ? 'Elegí el insumo.' : ''),
-        col.validar(),
-        fq.error(am ? '' : errCantidad(cant.value)),
-        fv.error(am && !ven.value ? 'Elegí la venta.' : ''),
-        fd.error(am && ven.value === OTRO && !det.value.trim() ? 'Falta completarlo.' : ''),
-        monto.validar(),
-      ];
-      return e.filter(String)[0] || '';
-    },
-    enfocar: function () { tipo.focus(); },
-  };
-}
-
-// Un insumo del stock que usa una venta a medida: tipo, insumo, color (si la tela tiene lista) y cantidad, sin monto.
-// No ofrece los insumos de Tipo «A medida», que se compran para el trabajo.
-function lineaUsado() {
-  const lista = D.insumos.filter(function (i) { return i.t !== (L.aMedida || 'A medida'); });
-  const tipo = h('select', {});
-  llenar(tipo, 'Elegí el tipo', unicos(lista.map(function (i) { return i.t; })));
-  const ins = h('select', { disabled: true });
-  llenar(ins, 'Primero elegí el tipo', []);
-  const col = color();
-  col.mostrar(false);
-  const cant = h('input', { type: 'text', inputmode: 'decimal', autocomplete: 'off' });
-  const ft = marco('Tipo de insumo', tipo), fi = marco('Insumo', ins), fq = marco('Cantidad', cant);
-  const elegido = function () { return lista.filter(function (i) { return i.n === ins.value; })[0]; };
-  const alInsumo = function () {
-    const i = elegido();
-    col.mostrar(!!(i && i.l));
-    col.poner(i && i.l ? (D.colores[i.l] || []) : undefined);
-    fq.error('');
-    fq.ayuda(i ? (i.u === 'Metros' ? 'En metros.' : 'En unidades.') : '');
-  };
-  tipo.addEventListener('change', function () {
-    const nombres = lista.filter(function (i) { return i.t === tipo.value; }).map(function (i) { return i.n; });
-    llenar(ins, nombres.length === 1 ? null : (tipo.value ? 'Elegí el insumo' : 'Primero elegí el tipo'), nombres);
-    ins.disabled = !tipo.value;
-    ft.error(''); fi.error('');
-    alInsumo();
-  });
-  ins.addEventListener('change', function () { fi.error(''); alInsumo(); });
-  cant.addEventListener('input', function () { fq.error(''); });
-  return {
-    nodo: [ft.nodo, fi.nodo, col.nodo, fq.nodo],
-    valor: function () { return { insumo: ins.value, color: col.valor(), cantidad: cant.value.trim() }; },
-    validar: function () {
-      const e = [
-        ft.error(tipo.value ? '' : 'Elegí el tipo.'),
-        fi.error(tipo.value && !ins.value ? 'Elegí el insumo.' : ''),
-        col.validar(),
-        fq.error(errCantidad(cant.value)),
-      ];
-      return e.filter(String)[0] || '';
-    },
-    enfocar: function () { tipo.focus(); },
-  };
-}
-
-// Una lista de tarjetas que se agregan y se quitan (productos, insumos, partes de un kit).
-// fabrica(dato) arma cada tarjeta; nueva(dato, foco) agrega una y vaciar() las saca todas.
-// minimo: 0 si la lista puede quedar vacía (se puede quitar la única tarjeta); si no, siempre queda una.
-function bloque(etiqueta, cada, textoAgregar, fabrica, ayuda, minimo) {
+// Una lista de tarjetas que se agregan y se quitan (los productos de una venta).
+// fabrica() arma cada tarjeta; nueva(foco) agrega una. Siempre queda una.
+function bloque(etiqueta, cada, textoAgregar, fabrica) {
   const caja = h('div', {});
   const items = [];
-  const nodo = h('div', { class: 'campo' }, h('span', { class: 'etq' }, etiqueta),
-    ayuda ? h('p', { class: 'ayuda arriba' }, ayuda) : null, caja,
-    h('button', { type: 'button', class: 'agregar', onclick: function () { nueva(null, true); } }, '+ ' + textoAgregar));
-  function nueva(dato, foco) {
-    const it = fabrica(dato);
+  const nodo = h('div', { class: 'campo' }, h('span', { class: 'etq' }, etiqueta), caja,
+    h('button', { type: 'button', class: 'agregar', onclick: function () { nueva(true); } }, '+ ' + textoAgregar));
+  function nueva(foco) {
+    const it = fabrica();
     const titulo = h('span', { class: 'num' });
     const quitar = h('button', { type: 'button', class: 'quitar' }, 'Quitar');
     const tarjeta = h('div', { class: 'linea' }, h('div', { class: 'linea-cab' }, titulo, quitar), it.nodo);
     quitar.addEventListener('click', function () { items.splice(items.indexOf(it), 1); tarjeta.remove(); renumerar(); });
-    it.titulo = titulo; it.quitar = quitar; it.tarjeta = tarjeta;
+    it.titulo = titulo; it.quitar = quitar;
     items.push(it); caja.append(tarjeta); renumerar();
     if (foco) { tarjeta.scrollIntoView({ block: 'center', behavior: 'smooth' }); it.enfocar(); }
   }
   function renumerar() {
-    items.forEach(function (it, i) { it.titulo.textContent = cada + ' ' + (i + 1); it.quitar.hidden = minimo !== 0 && items.length < 2; });
+    items.forEach(function (it, i) { it.titulo.textContent = cada + ' ' + (i + 1); it.quitar.hidden = items.length < 2; });
   }
+  nueva(false);
   return {
     nodo: nodo,
-    nueva: nueva,
-    vaciar: function () { items.splice(0).forEach(function (it) { it.tarjeta.remove(); }); },
+    items: items,
     valor: function () { return items.map(function (it) { return it.valor(); }); },
     validar: function () { return items.map(function (it) { return it.validar(); }).filter(String)[0] || ''; },
   };
 }
 
-function lineas(nombre, etiqueta, fabrica, cada, textoAgregar) {
-  const b = bloque(etiqueta, cada, textoAgregar, fabrica);
-  b.nueva(null, false);
-  return { nombre: nombre, nodo: b.nodo, error: function () { return ''; }, valor: b.valor, validar: b.validar };
+// Una lista de opciones para tildar, como tarjetas: una sola (radio) o varias (checkbox).
+// items: [{ valor, titulo, monto, detalle }]. alCambiar(elegidos) avisa cada cambio.
+function tarjetas(nombre, etiqueta, items, o) {
+  o = o || {};
+  const varias = !!o.varias;
+  const grupo = 'g' + (++ids);
+  const elegidos = {};
+  const caja = h('div', { class: 'ventas' });
+  if (!items.length) caja.append(h('p', { class: 'vacio' }, o.vacio || 'No hay nada para elegir.'));
+  items.forEach(function (it) {
+    const inp = h('input', { type: varias ? 'checkbox' : 'radio', name: grupo, value: String(it.valor) });
+    inp.addEventListener('change', function () {
+      if (!varias) Object.keys(elegidos).forEach(function (k) { delete elegidos[k]; });
+      if (inp.checked) elegidos[it.valor] = it; else delete elegidos[it.valor];
+      m.error('');
+      if (o.alCambiar) o.alCambiar(Object.keys(elegidos).map(function (k) { return elegidos[k]; }));
+    });
+    caja.append(h('label', { class: 'venta' }, inp,
+      h('span', { class: 'venta-texto' },
+        h('span', { class: 'venta-cab' }, h('span', {}, it.titulo), it.monto !== undefined ? h('span', {}, pesos(it.monto)) : null),
+        it.detalle ? h('span', { class: 'venta-det' }, it.detalle) : null)));
+  });
+  const m = marco(etiqueta, caja, { grupo: true, ayuda: items.length ? o.ayuda : '', opcional: o.opcional });
+  return {
+    nombre: nombre, nodo: m.nodo, error: m.error,
+    valor: function () {
+      if (m.nodo.hidden) return varias ? [] : '';
+      const v = Object.keys(elegidos).map(Number).sort(function (a, b) { return a - b; });
+      return varias ? v : (v.length ? v[0] : '');
+    },
+    validar: function () {
+      if (m.nodo.hidden || o.opcional) return m.error('');
+      if (!items.length) return m.error(o.vacio || 'No hay nada para elegir.');
+      return m.error(Object.keys(elegidos).length ? '' : 'Elegí una.');
+    },
+    mostrar: function (si) { m.nodo.hidden = !si; },
+  };
 }
 
-// Lo que falta cobrar de una venta: el neto menos sus pagos parciales.
-function saldo(v) { return v.saldo === undefined ? v.neto : v.saldo; }
-
-// Las ventas cargadas con «Todavía no la cobré» que ningún cobro completo cubre todavía, para tildar.
-// alCambiar(lo que falta cobrar de las elegidas, cuántas son).
-function ventasPendientes(alCambiar) {
-  const pend = D.pendientes || [];
-  const elegidas = {};
-  const caja = h('div', { class: 'ventas' });
-  if (!pend.length) caja.append(h('p', { class: 'vacio' }, 'No hay ventas sin cobrar.'));
-  pend.forEach(function (v) {
-    const chk = h('input', { type: 'checkbox', value: String(v.id) });
-    chk.addEventListener('change', function () {
-      if (chk.checked) elegidas[v.id] = v; else delete elegidas[v.id];
-      m.error('');
-      alCambiar(suma(), Object.keys(elegidas).length);
-    });
-    const yaCobrado = v.cobrado ? 'Cobraste ' + pesos(v.cobrado) + ' de ' + pesos(v.neto) + '. ' : '';
-    caja.append(h('label', { class: 'venta' }, chk,
-      h('span', { class: 'venta-texto' },
-        h('span', { class: 'venta-cab' }, h('span', {}, 'Venta ' + v.id + ' · ' + v.fecha + (v.canal ? ' · ' + v.canal : '')), h('span', {}, pesos(saldo(v)))),
-        h('span', { class: 'venta-det' }, yaCobrado + (v.detalle || 'Sin productos')))));
-  });
-  const m = marco('Ventas que cobra', caja, { grupo: true, ayuda: pend.length ? 'Tildá las ventas que cubre este cobro. El monto de cada una es lo que falta cobrar.' : '' });
-  function suma() { return Object.keys(elegidas).reduce(function (s, id) { return s + saldo(elegidas[id]); }, 0); }
-  return {
-    nombre: 'ventas', nodo: m.nodo, error: m.error,
-    valor: function () { return Object.keys(elegidas).map(Number).sort(function (a, b) { return a - b; }); },
-    validar: function () {
-      if (!pend.length) return m.error('No hay ventas sin cobrar para elegir.');
-      return m.error(Object.keys(elegidas).length ? '' : 'Elegí al menos una venta.');
+// El primer campo de Venta y de Cobro: cambia entre las dos cargas, que viven en el mismo botón del menú.
+function queCargas(actual) {
+  const opciones = ['Una venta nueva', 'Un cobro de una venta'];
+  const codigos = ['venta', 'cobro'];
+  return chips('que', 'Qué cargás', opciones, {
+    inicial: opciones[codigos.indexOf(actual)],
+    alCambiar: function (op) {
+      const cod = codigos[opciones.indexOf(op)];
+      if (cod && cod !== tipo) elegir(L.tipos.filter(function (t) { return t.codigo === cod; })[0], true);
     },
-  };
+  });
 }
 
 // ---------- Tipos de carga ----------
@@ -822,45 +678,63 @@ function ventasPendientes(alCambiar) {
 
 const TIPOS = {
   venta: {
-    intro: 'Una carga por pedido.',
+    intro: 'Una carga por pedido. Lo que te paguen después de una venta también se carga acá, como cobro.',
     grupos: function () {
-      // «Cobré una parte»: la venta queda sin cobrar y la seña se guarda aparte, como un pago parcial.
-      const sena = plata('montoSena', 'Seña cobrada', { ayuda: 'Lo que te pagaron ahora. Lo que falta queda sin cobrar hasta que cargues el cobro.' });
-      const dondeSena = chips('formaPagoSena', 'Dónde entró la seña', L.cuentas);
-      sena.mostrar(false);
-      dondeSena.mostrar(false);
-      const formas = L.cuentas.concat([L.pendiente], L.cobreParte ? [L.cobreParte] : []);
-      const productos = lineas('lineas', 'Productos', function () { return lineaProducto({ kits: true }); }, 'Producto', 'Agregar otro producto');
-      // Los insumos del stock que usa un trabajo a medida: solo aparece con un producto a medida en la venta.
-      const usados = bloque('Insumos del stock que usa', 'Insumo', 'Agregar insumo del stock', lineaUsado,
-        'Solo en trabajos a medida: la tela u otro insumo que ya tenías y usaste. Lo que compraste para el trabajo va en Compra de Insumos.', 0);
-      usados.nodo.hidden = true;
-      const actualizar = function () {
-        const hay = productos.valor().some(function (p) { return esMedida(p.producto); });
-        if (!hay && !usados.nodo.hidden) usados.vaciar();
-        usados.nodo.hidden = !hay;
+      let netoManual = false;
+      let cobradoManual = false;
+      const bruto = plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó.', alEscribir: function () { autoNeto(); } });
+      const envio = plata('envio', 'Envío', { opcional: true });
+      const neto = plata('montoNeto', 'Monto neto', { ayuda: 'Lo que te queda después de comisiones y retenciones.', alEscribir: function () { netoManual = true; autoCobrado(); } });
+      const cobrado = plata('cobrado', 'Cobrado ahora', {
+        ayuda: 'Lo que ya te pagaron. Si fue una seña, la seña; si todavía nada, 0. Lo que falta lo cargás después como cobro.',
+        alEscribir: function () { cobradoManual = true; verCuenta(); },
+      });
+      const cuenta = chips('cuenta', 'Dónde entró la plata', L.cuentasCobro, { inicial: L.cuentasCobro[0] });
+      const canal = chips('canal', 'Canal', L.canales, {
+        alCambiar: function (c, m) {
+          const plataforma = cuentaDelCanal(c);
+          m.ayuda(plataforma ? 'Lo cobrado entra a ' + plataforma + '. Cuando ' + (c === 'Mercado Libre' ? 'lo libere' : 'lo retires') +
+            ', cargá el pase a Mercado Pago en Cuentas.' : '');
+          envio.ayuda(c === 'Mercado Libre' ? 'El envío que descontó Mercado Libre, como dato: ya está fuera del neto.'
+            : (c === 'Tienda Online' ? 'Si lo pagaste vos. En la tienda lo paga el cliente.'
+              : 'Si lo pagás en el correo al entregarlo, podés completarlo después en la libreta.'));
+          cobrado.mostrar(!!c && !plataforma);
+          if (plataforma && !netoManual) neto.poner('');
+          autoNeto();
+          autoCobrado();
+        },
+      });
+      cobrado.mostrar(false);
+      cuenta.mostrar(false);
+      envio.ayuda('Si lo pagaste vos.');
+      // Por transferencia, el neto suele ser lo que pagó el cliente, y lo cobrado, el neto: se completan solos
+      // hasta que se escriben a mano.
+      function autoNeto() {
+        if (!netoManual && cobrado.visible()) { neto.poner(bruto.valor()); autoCobrado(); }
+      }
+      function autoCobrado() {
+        if (!cobradoManual && cobrado.visible()) cobrado.poner(neto.valor());
+        verCuenta();
+      }
+      function verCuenta() {
+        cuenta.mostrar(cobrado.visible() && numero(cobrado.valor() || 0) > 0);
+      }
+      const productos = bloque('Productos', 'Producto', 'Agregar otro producto', lineaVenta);
+      // Las compras para trabajos a medida que todavía no tienen venta: aparecen con un producto a medida.
+      const sueltas = D.comprasSueltas || [];
+      const compras = tarjetas('compras', 'Compras para este trabajo', sueltas.map(function (c) {
+        return { valor: c.id, titulo: 'Compra ' + c.id + ' · ' + c.fecha, monto: c.monto, detalle: c.detalle };
+      }), { varias: true, opcional: true, ayuda: 'Las compras a medida que cargaste sin venta. Tildá las de este trabajo.' });
+      compras.mostrar(false);
+      const verCompras = function () {
+        compras.mostrar(sueltas.length > 0 && productos.items.some(function (it) { return it.esMedida(); }));
       };
-      productos.nodo.addEventListener('change', actualizar);
-      productos.nodo.addEventListener('click', function () { setTimeout(actualizar, 0); });
-      const campoUsados = {
-        nombre: 'insumos', nodo: usados.nodo, error: function () { return ''; },
-        valor: function () { return usados.nodo.hidden ? [] : usados.valor(); },
-        validar: function () { return usados.nodo.hidden ? '' : usados.validar(); },
-      };
+      productos.nodo.addEventListener('click', function () { setTimeout(verCompras, 0); });
       return [
-        [chips('canal', 'Canal', L.canales)],
-        [productos, campoUsados],
-        [
-          plata('montoBruto', 'Monto pagado por el cliente', { ayuda: 'Con el envío, si lo pagó.' }),
-          plata('montoNeto', 'Monto neto cobrado', { ayuda: 'Lo que te queda después de comisiones y retenciones.' }),
-          plata('envio', 'Envío que pagaste', { opcional: true, ayuda: 'Si pagaste vos el envío de este pedido.' }),
-          chips('formaPago', 'Forma de pago', formas, {
-            ayuda: 'Dónde entró la plata: en la tienda, Pago Nube, y en Mercado Libre, Mercado Libre. Si te pagaron una seña, «Cobré una parte».',
-            alCambiar: function (f) { sena.mostrar(f === L.cobreParte); dondeSena.mostrar(f === L.cobreParte); },
-          }),
-          sena,
-          dondeSena,
-        ],
+        [queCargas('venta')],
+        [canal],
+        [{ nombre: 'lineas', nodo: productos.nodo, error: function () { return ''; }, valor: productos.valor, validar: productos.validar }, compras],
+        [bruto, envio, neto, cobrado, cuenta],
         [
           texto('cliente', 'Cliente', { opcional: true, ayuda: 'Nombre, para la postventa.' }),
           chips('origen', 'Origen', L.origenes, { opcional: true, ayuda: '¿Cómo llegó el cliente?' }),
@@ -871,132 +745,111 @@ const TIPOS = {
       if (v.montoBruto && v.montoNeto && numero(v.montoNeto) > numero(v.montoBruto)) {
         return ['montoNeto', 'El neto no puede ser mayor que lo que pagó el cliente.'];
       }
-      if (v.formaPago === L.cobreParte) {
-        if (!(numero(v.montoSena) > 0)) return ['montoSena', 'La seña tiene que ser mayor que cero.'];
-        if (numero(v.montoSena) >= numero(v.montoNeto)) {
-          return ['montoSena', 'Tiene que ser menor que el monto neto. Si te pagaron todo, elegí dónde entró la plata.'];
-        }
+      if (v.cobrado && numero(v.cobrado) > numero(v.montoNeto)) {
+        return ['cobrado', 'No puede ser mayor que el monto neto.'];
       }
     },
     resumen: function (v) {
+      const n = numero(v.montoNeto);
+      const c = cuentaDelCanal(v.canal) ? n : numero(v.cobrado || 0);
       return v.canal + ' · ' + plural(v.lineas.length, 'producto', 'productos') + ' · ' + pesos(numero(v.montoBruto)) +
-        (v.formaPago === L.cobreParte ? ' · seña de ' + pesos(numero(v.montoSena)) : '') +
-        (v.insumos && v.insumos.length ? ' · ' + plural(v.insumos.length, 'insumo del stock', 'insumos del stock') : '');
+        (c >= n ? '' : (c > 0 ? ' · cobrado ' + pesos(c) + ', falta ' + pesos(n - c) : ' · sin cobrar'));
     },
   },
   cobro: {
-    intro: 'Para las ventas cargadas como «Todavía no la cobré».',
+    intro: 'Lo que te pagan de una venta que no se cobró del todo: una seña o el saldo.',
     grupos: function () {
-      const AYUDA = 'Se completa con lo que falta cobrar de las ventas elegidas. Si te pagaron otro monto, corregilo y anotá por qué en Notas.';
-      let automatico = true;
-      let total = 0;
-      const monto = plata('montoNeto', 'Monto cobrado', { ayuda: AYUDA, alEscribir: function () { automatico = false; } });
-      const ayudaParcial = function () { return 'Lo que te pagaron ahora. Tiene que ser menor que lo que falta: ' + pesos(total) + '.'; };
-      // Solo con una venta elegida. Tildada, el monto no se completa solo y la venta sigue sin cobrar por el resto.
-      const parcial = casilla('parcial', 'Es una parte (seña)', 'La venta sigue sin cobrar por lo que falta.', function (si) {
-        automatico = !si;
-        monto.poner(si ? '' : (total ? aTexto(total) : ''));
-        monto.ayuda(si ? ayudaParcial() : AYUDA);
+      let saldo = 0;
+      let manual = false;
+      const pend = D.pendientes || [];
+      const monto = plata('montoNeto', 'Monto cobrado', {
+        ayuda: 'Se completa con lo que falta. Si te pagaron una parte, corregilo.',
+        alEscribir: function () { manual = true; verResto(); },
       });
-      parcial.mostrar(false);
-      const ventas = ventasPendientes(function (t, n) {
-        total = t;
-        parcial.mostrar(n === 1);
-        if (automatico) monto.poner(t ? aTexto(t) : '');
+      const resto = casilla('noPagaResto', 'No va a pagar el resto', 'La venta queda saldada con este cobro, aunque sea menos.');
+      resto.mostrar(false);
+      function verResto() {
+        const n = numero(monto.valor() || 0);
+        resto.mostrar(saldo > 0 && n > 0 && n < saldo - 0.005);
+      }
+      const ventas = tarjetas('venta', 'Venta que cobra', pend.map(function (v) {
+        const ya = v.cobrado ? 'Cobraste ' + pesos(v.cobrado) + ' de ' + pesos(v.neto) + '. ' : '';
+        return {
+          valor: v.id, titulo: 'Venta ' + v.id + ' · ' + v.fecha + (v.canal ? ' · ' + v.canal : ''), monto: v.saldo,
+          detalle: ya + [v.cliente, v.detalle].filter(String).join(' · '),
+        };
+      }), {
+        vacio: 'No hay ventas con saldo.',
+        ayuda: 'El monto de cada una es lo que falta cobrar.',
+        alCambiar: function (el) {
+          saldo = el.length ? pend.filter(function (v) { return v.id === el[0].valor; })[0].saldo : 0;
+          if (!manual) monto.poner(saldo ? aTexto(saldo) : '');
+          verResto();
+        },
       });
       return [
+        [queCargas('cobro')],
         [ventas],
-        [parcial, monto, chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'Dónde entró la plata.' })],
+        [monto, resto, chips('cuenta', 'Dónde entró la plata', L.cuentasCobro, { inicial: L.cuentasCobro[0] })],
       ];
     },
     cruzar: function (v) {
-      if (!v.parcial) return;
-      const venta = (D.pendientes || []).filter(function (x) { return x.id === v.ventas[0]; })[0];
+      const venta = (D.pendientes || []).filter(function (x) { return x.id === v.venta; })[0];
       const n = numero(v.montoNeto);
       if (!(n > 0)) return ['montoNeto', 'Tiene que ser mayor que cero.'];
-      if (venta && n >= saldo(venta)) {
-        return ['montoNeto', 'Tiene que ser menor que lo que falta: ' + pesos(saldo(venta)) + '. Si te pagaron todo, destildá «Es una parte».'];
-      }
+      if (venta && n > venta.saldo + 0.005) return ['montoNeto', 'No puede pasar lo que falta: ' + pesos(venta.saldo) + '.'];
     },
-    resumen: function (v) {
-      const cuales = v.parcial ? 'Pago parcial de la venta ' + v.ventas[0] : (v.ventas.length === 1 ? 'Venta ' : 'Ventas ') + lista(v.ventas.map(String));
-      return cuales + ' · ' + pesos(numero(v.montoNeto));
-    },
-  },
-  compra: {
-    intro: 'Una carga por compra. El envío va una sola vez, al final. Lo que comprás para un trabajo a medida va con el tipo «A medida» y la venta del trabajo.',
-    grupos: function () {
-      return [
-        [texto('proveedor', 'Proveedor', { sugerencias: D.proveedores })],
-        [lineas('lineas', 'Insumos', lineaInsumo, 'Insumo', 'Agregar otro insumo')],
-        [
-          plata('envio', 'Envío de la compra', { opcional: true, ayuda: 'Lo que cobró el proveedor por mandarla. Vacío si la retiraste.' }),
-          chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'De dónde salió la plata.' }),
-        ],
-      ];
-    },
-    resumen: function (v) {
-      const total = v.lineas.reduce(function (s, l) { return s + numero(l.monto); }, v.envio ? numero(v.envio) : 0);
-      return v.proveedor + ' · ' + plural(v.lineas.length, 'insumo', 'insumos') + ' · ' + pesos(total);
+    resumen: function (v, r) {
+      return 'Venta ' + v.venta + ' · ' + pesos(numero(v.montoNeto)) + (r && r.saldada ? ' · quedó saldada' : (r && r.falta ? ' · falta ' + pesos(r.falta) : ''));
     },
   },
   gasto: {
-    intro: 'Todo lo que no es insumo. Los envíos van en su venta o en su compra.',
+    intro: 'Todo lo que sale: insumos, packaging, plataformas, impuestos y lo demás. El envío de una venta va en la venta.',
     grupos: function () {
+      const ventas = D.ventasMedida || [];
+      const ven = h('select', {});
+      llenar(ven, 'Elegí la venta', ventas.map(function (v) {
+        return [String(v.id), ['Venta ' + v.id, v.fecha, v.cliente, v.detalle].filter(String).join(' · ')];
+      }).concat([[OTRO, 'Todavía no la cargué']]));
+      const fv = marco('Para qué venta', ven, { ayuda: 'Las ventas con productos a medida. Si la venta todavía no está cargada, elegí «Todavía no la cargué» y después la atás desde la venta.' });
+      fv.nodo.hidden = true;
+      const detalle = texto('detalle', 'Detalle', { opcional: true, largo: 200, ayuda: 'Por ejemplo: «Telavendo: 3 m de gabardina».' });
+      const campoVenta = {
+        nombre: 'venta', nodo: fv.nodo, error: fv.error,
+        valor: function () { return fv.nodo.hidden || ven.value === OTRO ? '' : ven.value; },
+        validar: function () { return fv.error(!fv.nodo.hidden && !ven.value ? 'Elegí la venta.' : ''); },
+      };
+      ven.addEventListener('change', function () {
+        fv.error(''); detalle.error('');
+        detalle.ayuda(ven.value === OTRO ? 'El trabajo y lo que compraste. Por ejemplo: «Cortinas de Analía: 8 m de lino».'
+          : 'Lo que compraste, si querés. Por ejemplo: «8 m de lino».');
+      });
+      const tipoGasto = chips('tipoGasto', 'Tipo', L.tiposGasto, {
+        alCambiar: function (t, m) {
+          m.ayuda((L.ayudaGastos && L.ayudaGastos[t]) || '');
+          const am = t === L.compraMedida;
+          fv.nodo.hidden = !am;
+          if (!am) { ven.value = ''; fv.error(''); }
+          detalle.ayuda(am ? 'Lo que compraste, si querés. Por ejemplo: «8 m de lino».' : 'Por ejemplo: «Telavendo: 3 m de gabardina».');
+        },
+      });
       return [
-        [
-          chips('categoria', 'Categoría', L.categoriasGasto),
-          texto('detalle', 'Detalle', { ayuda: 'Por ejemplo: Tiendanube octubre.', largo: 200 }),
-        ],
+        [tipoGasto, campoVenta, detalle],
         [
           plata('montoNeto', 'Monto'),
-          chips('formaPago', 'Forma de pago', L.cuentas, { ayuda: 'De dónde salió la plata.' }),
+          chips('cuenta', 'De dónde salió la plata', L.cuentas, { inicial: L.cuentas[0] }),
         ],
       ];
     },
-    resumen: function (v) { return v.categoria + ' · ' + pesos(numero(v.montoNeto)); },
+    cruzar: function (v) {
+      if (v.tipoGasto === L.compraMedida && !v.venta && !v.detalle) {
+        return ['detalle', 'Sin venta, contá el trabajo y lo que compraste.'];
+      }
+    },
+    resumen: function (v) { return v.tipoGasto + ' · ' + pesos(numero(v.montoNeto)); },
   },
-  ajuste: {
-    intro: 'Lo que entra o sale del stock de productos terminados sin ser una venta.',
-    grupos: function () {
-      // Armado de Almohadón: se eligen solo almohadones y sale su funda. Al entrar o salir de ese motivo,
-      // los productos se vuelven a empezar.
-      let armado = false;
-      const b = bloque('Productos', 'Producto', 'Agregar otro producto', function () { return lineaProducto({ armado: armado }); });
-      b.nueva(null, false);
-      const motivos = L.motivos.slice();
-      if (L.armado) motivos.splice(1, 0, L.armado);
-      return [
-        [chips('motivo', 'Motivo', motivos, {
-          alCambiar: function (m, campo) {
-            const si = m === L.armado;
-            campo.ayuda(si ? 'Una funda que rellenaste: elegí el almohadón y sale del stock su funda, del mismo color.' : '');
-            if (si !== armado) { armado = si; b.vaciar(); b.nueva(null, false); }
-          },
-        })],
-        [{ nombre: 'lineas', nodo: b.nodo, error: function () { return ''; }, valor: b.valor, validar: b.validar }],
-      ];
-    },
-    resumen: function (v) {
-      const n = v.lineas.reduce(function (s, l) { return s + Number(l.cantidad); }, 0);
-      return v.motivo + ' · ' + plural(n, 'unidad', 'unidades');
-    },
-  },
-  horas: {
-    intro: 'Una carga por sesión de trabajo.',
-    grupos: function () {
-      return [[
-        chips('tarea', 'Tarea', L.tareas, { alCambiar: function (t, m) { m.ayuda(L.ayudaTareas[t] || ''); } }),
-        duracion(),
-      ]];
-    },
-    resumen: function (v) {
-      const t = Number(v.horas || 0) * 60 + Number(v.minutos || 0);
-      return v.tarea + ' · ' + ((t >= 60 ? Math.floor(t / 60) + ' h ' : '') + (t % 60 ? (t % 60) + ' min' : '')).trim();
-    },
-  },
-  dinero: {
-    intro: 'Pases entre cuentas, como lo que libera Mercado Libre o lo que retirás de la tienda; retiros para vos y aportes de plata tuya.',
+  cuentas: {
+    intro: 'Pases entre cuentas el día que pasan, como lo que libera Mercado Libre o lo que retirás de la tienda; retiros para vos y aportes de plata tuya.',
     grupos: function () {
       return [[
         chips('desde', 'Desde', L.cuentas.concat([L.aporte]), { ayuda: 'Aporte: plata tuya que entra al negocio. Lo que libera Mercado Libre sale de Mercado Libre, y lo que retirás de la tienda, de Pago Nube.' }),
@@ -1046,7 +899,7 @@ if (ANCHO) {
   else if (ANCHO.addListener) ANCHO.addListener(alAncho);
 }
 
-// Lee las listas de la planilla. En silencio, después de guardar, para que las ventas sin cobrar estén al día.
+// Lee las listas de la planilla. En silencio, después de guardar, para que las ventas con saldo estén al día.
 function cargarListas(silencio) {
   if (!silencio) {
     $('cargando').hidden = false;
@@ -1062,7 +915,7 @@ function cargarListas(silencio) {
       D = r;
       L = r.listas;
       $('cargando').hidden = true;
-      $('tipos').replaceChildren.apply($('tipos'), L.tipos.filter(function (t) { return TIPOS[t.codigo]; }).map(function (t) {
+      $('tipos').replaceChildren.apply($('tipos'), L.tipos.filter(function (t) { return t.menu && TIPOS[t.codigo]; }).map(function (t) {
         return h('button', { type: 'button', class: 'tipo', onclick: function () { elegir(t); } },
           h('span', { class: 'tipo-texto' }, h('span', { class: 'tipo-nombre' }, t.nombre)),
           h('span', { class: 'flecha', 'aria-hidden': 'true' }, '›'));
@@ -1096,30 +949,34 @@ function menu() {
   window.scrollTo(0, 0);
 }
 
-function elegir(t) {
+// El título es el del botón del menú: el cobro va dentro de Venta.
+function elegir(t, mismoBoton) {
   tipo = t.codigo;
   codigo = nuevoCodigo();
-  $('tipoTitulo').textContent = t.nombre;
+  if (!mismoBoton) $('tipoTitulo').textContent = t.codigo === 'cobro' ? 'Venta' : t.nombre;
   $('tipoIntro').textContent = TIPOS[tipo].intro;
   $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = false; $('pie').hidden = false;
   armar();
   aviso('');
-  window.scrollTo(0, 0);
+  if (!mismoBoton) window.scrollTo(0, 0);
 }
 
 // Arma el formulario del tipo: la fecha, una tarjeta por grupo y las notas.
-// Las tarjetas principales van en la columna ancha de la computadora: las que tienen líneas o ventas para
-// elegir y, en los tipos sin líneas (Gasto, Horas, Movimientos de Cuentas), todas salvo la fecha y las notas.
+// Las tarjetas principales van en la columna ancha de la computadora: las que tienen productos o ventas para
+// elegir y, en los tipos sin listas (Gasto, Cuentas), todas salvo la fecha y las notas.
 function armar() {
   comunes = { fecha: fecha(), notas: notas() };
   const grupos = TIPOS[tipo].grupos();
   campos = [].concat.apply([], grupos);
-  const conLineas = function (g) { return g.some(function (c) { return c.nombre === 'lineas' || c.nombre === 'ventas'; }); };
-  const hayLineas = grupos.some(conLineas);
+  const conLista = function (g) { return g.some(function (c) { return c.nombre === 'lineas' || c.nombre === 'venta' && tipo === 'cobro'; }); };
+  const hayLista = grupos.some(conLista);
   const tarjeta = function (nodos, principal) { return { nodo: h('section', { class: 'tarjeta' }, nodos), principal: !!principal }; };
-  armadas = [tarjeta(comunes.fecha.nodo)]
+  // «Qué cargás» va primero, antes de la fecha.
+  const que = grupos[0][0].nombre === 'que' ? grupos.shift() : null;
+  armadas = (que ? [tarjeta(que.map(function (c) { return c.nodo; }), true)] : [])
+    .concat([tarjeta(comunes.fecha.nodo)])
     .concat(grupos.map(function (g) {
-      return tarjeta(g.map(function (c) { return c.nodo; }), hayLineas ? conLineas(g) : true);
+      return tarjeta(g.map(function (c) { return c.nodo; }), hayLista ? conLista(g) : true);
     }))
     .concat([tarjeta(comunes.notas.nodo)]);
   distribuir();
@@ -1139,10 +996,7 @@ function guardar() {
   const todos = [comunes.fecha].concat(campos);
   const errores = todos.map(function (c) { return c.validar(); });
   const v = { codigo: codigo, tipo: tipo, fecha: comunes.fecha.valor(), notas: comunes.notas.valor() };
-  campos.forEach(function (c) {
-    const x = c.valor();
-    if (c.nombre === 'duracion') { v.horas = x.horas; v.minutos = x.minutos; } else v[c.nombre] = x;
-  });
+  campos.forEach(function (c) { if (c.nombre !== 'que') v[c.nombre] = c.valor(); });
   const cruce = TIPOS[tipo].cruzar && errores.every(function (e) { return !e; }) ? TIPOS[tipo].cruzar(v) : null;
   if (cruce) {
     const c = campos.filter(function (x) { return x.nombre === cruce[0]; })[0];
@@ -1160,18 +1014,14 @@ function guardar() {
   $('volver').disabled = true;
   $('guardar').textContent = 'Guardando…';
   $('estado').textContent = '';
-  const nombre = $('tipoTitulo').textContent;
+  const nombre = tipo === 'cobro' ? 'Cobro' : $('tipoTitulo').textContent;
   pedir('POST', API, { clave: CLAVE, carga: v })
     .then(function (r) {
       liberar();
-      const detalle = nombre + ' · ' + TIPOS[tipo].resumen(v);
+      const detalle = nombre + ' · ' + TIPOS[tipo].resumen(v, r);
       menu();
-      // Una venta con «Cobré una parte» son dos cargas: la venta y la seña.
-      const titulo = r.sena
-        ? (r.repetida ? 'Ya estaban guardadas (cargas ' + r.id + ' y ' + r.sena + ')'
-          : 'Listo, quedaron guardadas la venta (carga ' + r.id + ') y la seña (carga ' + r.sena + ')')
-        : (r.repetida ? 'Ya estaba guardada (carga ' + r.id + ')' : 'Listo, quedó guardada (carga ' + r.id + ')');
-      aviso(titulo, r.repetida ? detalle + '. No se cargó dos veces.' : detalle);
+      aviso(r.repetida ? 'Ya estaba guardada (carga ' + r.id + ')' : 'Listo, quedó guardada (carga ' + r.id + ')',
+        r.repetida ? detalle + '. No se cargó dos veces.' : detalle);
       cargarListas(true);
     })
     .catch(function (e) {
