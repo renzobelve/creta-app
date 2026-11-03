@@ -132,6 +132,8 @@
 
   /* Consultas: un resumen arriba y una card por venta, cobro, gasto o movimiento de Cuentas. */
   .titulo-segundo { margin-top: 26px; }
+  #filtroMes { margin-top: 14px; }
+  #filtroMes .campo { margin-bottom: 0; }
   .resumen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
   .dato-etq { display: block; font-size: 13px; color: var(--gris); }
   .dato-valor { display: block; font-weight: 700; font-size: 18px; overflow-wrap: anywhere; }
@@ -196,6 +198,7 @@
     #eleccion.dos-bloques .titulo-segundo { margin-top: 2px; }
     /* Las consultas: las cards en grilla a la izquierda y, a la derecha en 380 px, qué se ve y el resumen,
        que acompañan al bajar. */
+    #filtroMes select { max-width: 320px; }
     .consulta-cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-areas: "items lado"; gap: 16px; align-items: start; }
     .consulta-cols > .lado { grid-area: lado; position: sticky; top: 24px; }
     .consulta-cols > .lado > .tarjeta:last-child { margin-bottom: 0; }
@@ -242,6 +245,7 @@
       <button type="button" class="enlace" id="volver">Volver</button>
     </div>
     <p class="intro" id="tipoIntro"></p>
+    <div id="filtroMes" hidden></div>
   </section>
   <div id="formulario" hidden></div>
   <div id="consulta" hidden></div>
@@ -998,6 +1002,7 @@ function menu() {
   $('eleccion').hidden = false; $('elegido').hidden = true; $('formulario').hidden = true; $('pie').hidden = true;
   $('consulta').hidden = true;
   $('consulta').replaceChildren();
+  $('filtroMes').hidden = true;
   armadas = [];
   $('formulario').replaceChildren();
   $('formulario').className = '';
@@ -1013,6 +1018,7 @@ function elegir(t, mismoBoton) {
   $('tipoIntro').textContent = TIPOS[tipo].intro;
   consulta = '';
   $('consulta').hidden = true;
+  $('filtroMes').hidden = true;
   $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = false; $('pie').hidden = false;
   armar();
   aviso('');
@@ -1098,9 +1104,9 @@ function liberar() {
 }
 
 // ---------- Consultas ----------
-// Lo del mes en curso, que manda el script junto con las listas. Cada botón muestra su lista en cards, con un
-// resumen arriba; Venta muestra también los cobros del mes. Se ve al instante con lo que ya había y se rearma
-// cuando llegan los datos al día.
+// Cada botón muestra su lista del mes en cards, con un resumen; Venta muestra también los cobros del mes.
+// El mes en curso llega con las listas: se ve al instante y se rearma cuando llegan los datos al día. Otro mes se
+// elige arriba y se pide al script (?mes=2026-10); queda guardado mientras dure la consulta.
 
 const CONSULTAS = [
   { codigo: 'venta', nombre: 'Venta' },
@@ -1109,6 +1115,44 @@ const CONSULTAS = [
 ];
 let consulta = '';
 let verCobros = false;
+let mesConsulta = '';
+let otrosMeses = {};
+let erroresMes = {};
+
+function mayuscula(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+// Los datos del mes elegido, o undefined si todavía no llegaron.
+function datosConsulta() {
+  const actual = (D && D.consultas) || {};
+  if (!mesConsulta || actual.mes === mesConsulta) return actual;
+  return otrosMeses[mesConsulta];
+}
+
+// El desplegable de mes, en la tarjeta del título: los meses con algo cargado, con el elegido marcado.
+function armarFiltroMes() {
+  const C = (D && D.consultas) || {};
+  const meses = C.meses || [];
+  const caja = $('filtroMes');
+  caja.hidden = !meses.length;
+  if (!meses.length) return caja.replaceChildren();
+  const sel = h('select', {});
+  llenar(sel, null, meses.map(function (m) { return [m, mayuscula(nombreMes(m))]; }));
+  sel.value = mesConsulta || C.mes;
+  sel.addEventListener('change', function () { elegirMes(sel.value); });
+  caja.replaceChildren(marco('Mes', sel).nodo);
+}
+
+function elegirMes(m) {
+  mesConsulta = m;
+  delete erroresMes[m];
+  mostrarConsulta();
+  if (datosConsulta()) return;
+  const cual = consulta;
+  pedir('GET', API + '?clave=' + encodeURIComponent(CLAVE) + '&mes=' + encodeURIComponent(m))
+    .then(function (r) { otrosMeses[m] = r.consultas; })
+    .catch(function (e) { erroresMes[m] = e.red ? 'No pude leer la planilla: revisá la conexión y tocá Reintentar.' : e.message; })
+    .then(function () { if (consulta === cual && mesConsulta === m) mostrarConsulta(); });
+}
 
 function r2(n) { return Math.round((n || 0) * 100) / 100; }
 function sumar(l, f) { return r2(l.reduce(function (s, x) { return s + (Number(f(x)) || 0); }, 0)); }
@@ -1120,21 +1164,37 @@ function nombreMes(mes) {
   return new Date(p[0], p[1] - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
 }
 
+// Arranca en el mes en curso. Los otros meses se vuelven a pedir en cada consulta, por si cambió algo.
 function consultar(c) {
   consulta = c.codigo;
   verCobros = false;
+  mesConsulta = '';
+  otrosMeses = {};
+  erroresMes = {};
   $('tipoTitulo').textContent = c.nombre;
   $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = true; $('pie').hidden = true;
   $('consulta').hidden = false;
   aviso('');
+  armarFiltroMes();
   mostrarConsulta();
   window.scrollTo(0, 0);
-  cargarListas(true).then(function () { if (consulta === c.codigo) mostrarConsulta(); });
+  cargarListas(true).then(function () {
+    if (consulta !== c.codigo) return;
+    armarFiltroMes();
+    if (!mesConsulta || mesConsulta === (D.consultas || {}).mes) mostrarConsulta();
+  });
 }
 
 // A la derecha en la computadora (arriba en el celular): qué se ve y el resumen. A la izquierda, las cards.
 function mostrarConsulta() {
-  const C = (D && D.consultas) || {};
+  const C = datosConsulta();
+  if (!C) {
+    const error = erroresMes[mesConsulta];
+    $('consulta').replaceChildren(h('section', { class: 'tarjeta' },
+      h('p', { class: 'vacio' }, error || 'Cargando ' + nombreMes(mesConsulta) + '…'),
+      error ? h('button', { type: 'button', class: 'enlace', onclick: function () { elegirMes(mesConsulta); } }, 'Reintentar') : null));
+    return;
+  }
   const mes = nombreMes(C.mes);
   let vista;
   if (consulta === 'venta') {
@@ -1204,7 +1264,7 @@ function vistaVentas(l, mes) {
           v.bruto ? h('p', { class: 'item-sub' }, 'Pagó ' + pesos(r2(v.bruto)) + (v.envio ? ' · envío ' + pesos(r2(v.envio)) : '')) : null,
         ],
         notas: v.notas,
-        etiquetas: [estado, ganancia, v.origen ? [v.origen, ''] : null],
+        etiquetas: [estado, ganancia],
       });
     }),
   };
