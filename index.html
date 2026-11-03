@@ -19,6 +19,7 @@
     --borde: #D6C3BD;
     --error: #B3261E;
     --ok: #38761D;
+    --verde: #274E13;
     --ok-fondo: #EAF3E5;
     color-scheme: light;
   }
@@ -138,6 +139,13 @@
   .resumen { display: grid; grid-auto-flow: column; grid-template-columns: auto; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
   .dato-etq { display: block; font-size: 13px; color: var(--gris); }
   .dato-valor { display: block; font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
+  /* El Resumen mensual, de a dos como en la solapa Mes: los saldos arriba; Entró, en verde, y Salió, en bordó. */
+  .resumen-caja { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .resumen-caja .dato { padding: 8px 10px; border-radius: 10px; background: var(--crema); }
+  .resumen-caja .dato.entro { background: var(--verde); }
+  .resumen-caja .dato.salio { background: var(--bordo); }
+  .resumen-caja .entro .dato-etq, .resumen-caja .entro .dato-valor,
+  .resumen-caja .salio .dato-etq, .resumen-caja .salio .dato-valor { color: #fff; }
   .items { display: flex; flex-direction: column; gap: 10px; }
   .item { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 12px 14px; min-width: 0; }
   .item-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
@@ -192,11 +200,11 @@
     .columnas .linea > .linea-cab, .columnas .linea > .linea-cab + .campo { grid-column: 1 / -1; }
     .columnas .linea > .linea-cab { margin-bottom: -4px; }
     .columnas .ventas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
-    /* El menú, con las consultas, en dos columnas: Cargar a la izquierda y Consultar a la derecha, con los botones
-       uno debajo del otro. Sin consultas (un script viejo), los botones de carga siguen en grilla. */
-    #eleccion.dos-bloques { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
-    #eleccion.dos-bloques .tipos { display: flex; flex-direction: column; }
-    #eleccion.dos-bloques .titulo-segundo { margin-top: 2px; }
+    /* El menú, con las consultas y los reportes, en una columna por bloque (Cargar, Consultar y Reportes), con los
+       botones uno debajo del otro. Sin consultas (un script viejo), los botones de carga siguen en grilla. */
+    #eleccion.en-columnas { display: grid; grid-template-columns: repeat(var(--bloques, 2), minmax(0, 1fr)); gap: 24px; align-items: start; }
+    #eleccion.en-columnas .tipos { display: flex; flex-direction: column; }
+    #eleccion.en-columnas .titulo-segundo { margin-top: 2px; }
     /* Las consultas: las cards en grilla a la izquierda y, a la derecha en 380 px, qué se ve y el resumen,
        que acompañan al bajar. */
     #filtroMes select { max-width: 320px; }
@@ -238,6 +246,10 @@
     <div class="menu-bloque" id="consultar" hidden>
       <span class="titulo-menu titulo-segundo">¿Qué querés consultar?</span>
       <div class="tipos" id="consultas"></div>
+    </div>
+    <div class="menu-bloque" id="reportar" hidden>
+      <span class="titulo-menu titulo-segundo">¿Qué reporte querés ver?</span>
+      <div class="tipos" id="reportes"></div>
     </div>
   </section>
   <section class="tarjeta" id="elegido" hidden>
@@ -993,10 +1005,17 @@ function cargarListas(silencio) {
       $('tipos').replaceChildren.apply($('tipos'), L.tipos.filter(function (t) { return t.menu && TIPOS[t.codigo]; }).map(function (t) {
         return botonMenu(t.nombre, function () { elegir(t); });
       }));
-      // Las consultas aparecen solo si el script las manda (uno viejo no).
+      // Las consultas y los reportes aparecen solo si el script los manda (uno viejo no).
+      const hayReportes = !!(r.consultas && r.consultas.caja);
       $('consultar').hidden = !r.consultas;
-      $('eleccion').classList.toggle('dos-bloques', !!r.consultas);
+      $('reportar').hidden = !hayReportes;
+      const bloques = 1 + (r.consultas ? 1 : 0) + (hayReportes ? 1 : 0);
+      $('eleccion').classList.toggle('en-columnas', bloques > 1);
+      $('eleccion').style.setProperty('--bloques', String(bloques));
       $('consultas').replaceChildren.apply($('consultas'), CONSULTAS.map(function (c) {
+        return botonMenu(c.nombre, function () { consultar(c); });
+      }));
+      $('reportes').replaceChildren.apply($('reportes'), REPORTES.map(function (c) {
         return botonMenu(c.nombre, function () { consultar(c); });
       }));
     })
@@ -1141,8 +1160,14 @@ const CONSULTAS = [
   { codigo: 'gasto', nombre: 'Gasto' },
   { codigo: 'cuenta', nombre: 'Cuenta' },
 ];
+// Los reportes van como una consulta más, con el mismo filtro de mes. Después vendrán Estado de Resultados y
+// Flujo de Fondos.
+const REPORTES = [
+  { codigo: 'resumen', nombre: 'Resumen mensual' },
+];
 let consulta = '';
 let verCobros = false;
+let verEgresos = false;
 let mesConsulta = '';
 let otrosMeses = {};
 let erroresMes = {};
@@ -1196,6 +1221,7 @@ function nombreMes(mes) {
 function consultar(c) {
   consulta = c.codigo;
   verCobros = false;
+  verEgresos = false;
   mesConsulta = '';
   otrosMeses = {};
   erroresMes = {};
@@ -1230,6 +1256,13 @@ function mostrarConsulta() {
     const que = chips('que', 'Qué ves', ['Ventas', 'Cobros'], {
       inicial: verCobros ? 'Cobros' : 'Ventas',
       alCambiar: function (op) { verCobros = op === 'Cobros'; mostrarConsulta(); },
+    });
+    vista.lado.unshift(h('section', { class: 'tarjeta' }, que.nodo));
+  } else if (consulta === 'resumen') {
+    vista = vistaResumen(C.caja || { inicial: 0, ingresos: [], egresos: [] }, mes);
+    const que = chips('que', 'Qué ves', ['Ingresos', 'Egresos'], {
+      inicial: verEgresos ? 'Egresos' : 'Ingresos',
+      alCambiar: function (op) { verEgresos = op === 'Egresos'; mostrarConsulta(); },
     });
     vista.lado.unshift(h('section', { class: 'tarjeta' }, que.nodo));
   } else if (consulta === 'gasto') {
@@ -1338,6 +1371,32 @@ function vistaGastos(l, mes) {
         notas: g.notas,
         etiquetas: [g.venta ? ['Venta ' + g.venta, ''] : null],
       });
+    }),
+  };
+}
+
+// El Resumen mensual, como la solapa Mes de la libreta: los dos saldos y lo que entró (en verde) y salió (en
+// bordó), y las cards de los ingresos o de los egresos. El detalle de Base ("Venta 5 · Cler · Pillow Berlín") se
+// parte: lo primero es el título y el resto va con la fecha.
+function vistaResumen(c, mes) {
+  const monto = function (x) { return x.monto; };
+  const entro = sumar(c.ingresos, monto), salio = sumar(c.egresos, monto);
+  const lista = verEgresos ? c.egresos : c.ingresos;
+  return {
+    intro: 'Con qué saldo empezó y terminó ' + mes + ', y lo que entró y salió, de lo más nuevo a lo más viejo.',
+    vacio: verEgresos ? 'No salió plata en ' + mes + '.' : 'No entró plata en ' + mes + '.',
+    lado: [h('section', { class: 'tarjeta' }, h('div', { class: 'resumen-caja' }, [
+      ['Saldo al empezar el mes', c.inicial, ''],
+      ['Saldo al terminar el mes', r2(c.inicial + entro - salio), ''],
+      ['Entró', entro, ' entro'],
+      ['Salió', salio, ' salio'],
+    ].map(function (d) {
+      return h('div', { class: 'dato' + d[2] }, h('span', { class: 'dato-etq' }, d[0]),
+        h('span', { class: 'dato-valor' }, pesos(r2(d[1])).replace(' ', ' ')));
+    })))],
+    items: lista.map(function (x) {
+      const partes = String(x.detalle || '').split(' · ');
+      return card({ titulo: partes[0] || (verEgresos ? 'Egreso' : 'Ingreso'), monto: x.monto, sub: juntar([x.fecha].concat(partes.slice(1))) });
     }),
   };
 }
