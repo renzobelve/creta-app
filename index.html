@@ -130,6 +130,29 @@
   .mal .venta { border-color: var(--error); }
   .vacio { color: var(--gris); font-size: 15px; margin: 0; }
 
+  /* Consultas: un resumen arriba y una card por venta, cobro, gasto o movimiento de Cuentas. */
+  .titulo-segundo { margin-top: 26px; }
+  .resumen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
+  .dato-etq { display: block; font-size: 13px; color: var(--gris); }
+  .dato-valor { display: block; font-weight: 700; font-size: 18px; overflow-wrap: anywhere; }
+  .items { display: flex; flex-direction: column; gap: 10px; }
+  .item { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 12px 14px; min-width: 0; }
+  .item-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+  .item-titulo { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
+  .item-monto { font-weight: 700; white-space: nowrap; }
+  .item-sub { margin: 2px 0 0; color: var(--gris); font-size: 13px; }
+  .item-linea { margin: 8px 0 0; font-size: 14px; overflow-wrap: anywhere; }
+  .item-prod { list-style: none; margin: 8px 0 0; padding: 0; font-size: 14px; }
+  .item-prod li + li { margin-top: 3px; }
+  .item-notas { margin: 8px 0 0; font-size: 13px; color: var(--gris); overflow-wrap: anywhere; }
+  .etiquetas { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+  .etiqueta {
+    font-size: 12px; line-height: 1.3; padding: 3px 9px; border-radius: 999px;
+    background: var(--crema); border: 1px solid var(--linea); color: var(--tinta);
+  }
+  .etiqueta.ok { background: var(--ok-fondo); border-color: #C5DDB8; color: #24501A; }
+  .etiqueta.falta { background: #FCEDEC; border-color: #F0C8C5; color: var(--error); }
+
   .pie {
     position: fixed; left: 0; right: 0; bottom: 0; background: rgba(249, 241, 239, .97);
     border-top: 1px solid var(--linea); padding: 10px 16px calc(10px + env(safe-area-inset-bottom));
@@ -146,8 +169,9 @@
   .enlace { border: 0; background: none; color: var(--bordo); font: inherit; font-size: 15px; text-decoration: underline; padding: 6px 0; }
   .enlace:disabled { color: var(--gris); text-decoration: none; }
 
-  /* En la computadora (desde 900 px): todo más ancho, el menú en grilla y el formulario en dos columnas,
-     con las líneas (productos, insumos o ventas) a la izquierda. En el celular no cambia nada. */
+  /* En la computadora (desde 900 px): todo más ancho, el menú en dos columnas (cargar y consultar), el formulario
+     en dos columnas, con las líneas (productos, insumos o ventas) a la izquierda, y las consultas con las cards en
+     grilla a la izquierda. En el celular no cambia nada. */
   @media (min-width: 900px) {
     main { max-width: 1200px; }
     .cab, .pie-in { max-width: 1152px; }
@@ -165,6 +189,18 @@
     .columnas .linea > .linea-cab, .columnas .linea > .linea-cab + .campo { grid-column: 1 / -1; }
     .columnas .linea > .linea-cab { margin-bottom: -4px; }
     .columnas .ventas { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); }
+    /* El menú, con las consultas, en dos columnas: Cargar a la izquierda y Consultar a la derecha, con los botones
+       uno debajo del otro. Sin consultas (un script viejo), los botones de carga siguen en grilla. */
+    #eleccion.dos-bloques { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: start; }
+    #eleccion.dos-bloques .tipos { display: flex; flex-direction: column; }
+    #eleccion.dos-bloques .titulo-segundo { margin-top: 2px; }
+    /* Las consultas: las cards en grilla a la izquierda y, a la derecha en 380 px, qué se ve y el resumen,
+       que acompañan al bajar. */
+    .consulta-cols { display: grid; grid-template-columns: minmax(0, 1fr) 380px; grid-template-areas: "items lado"; gap: 16px; align-items: start; }
+    .consulta-cols > .lado { grid-area: lado; position: sticky; top: 24px; }
+    .consulta-cols > .lado > .tarjeta:last-child { margin-bottom: 0; }
+    .consulta-cols > .principal { grid-area: items; min-width: 0; }
+    .items { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
     .pie { padding: 12px 24px; }
     .pie-in { display: flex; align-items: center; justify-content: flex-end; gap: 16px; }
     .estado { margin: 0; flex: 1; text-align: right; }
@@ -189,10 +225,16 @@
 <main>
   <div id="aviso" hidden></div>
   <section id="eleccion">
-    <span class="titulo-menu">¿Qué querés cargar?</span>
-    <p class="intro" id="cargando">Cargando las listas…</p>
-    <button type="button" class="enlace" id="reintentar" hidden>Reintentar</button>
-    <div class="tipos" id="tipos"></div>
+    <div class="menu-bloque">
+      <span class="titulo-menu">¿Qué querés cargar?</span>
+      <p class="intro" id="cargando">Cargando las listas…</p>
+      <button type="button" class="enlace" id="reintentar" hidden>Reintentar</button>
+      <div class="tipos" id="tipos"></div>
+    </div>
+    <div class="menu-bloque" id="consultar" hidden>
+      <span class="titulo-menu titulo-segundo">¿Qué querés consultar?</span>
+      <div class="tipos" id="consultas"></div>
+    </div>
   </section>
   <section class="tarjeta" id="elegido" hidden>
     <div class="elegido">
@@ -202,6 +244,7 @@
     <p class="intro" id="tipoIntro"></p>
   </section>
   <div id="formulario" hidden></div>
+  <div id="consulta" hidden></div>
 </main>
 
 <footer class="pie" id="pie" hidden>
@@ -916,9 +959,13 @@ function cargarListas(silencio) {
       L = r.listas;
       $('cargando').hidden = true;
       $('tipos').replaceChildren.apply($('tipos'), L.tipos.filter(function (t) { return t.menu && TIPOS[t.codigo]; }).map(function (t) {
-        return h('button', { type: 'button', class: 'tipo', onclick: function () { elegir(t); } },
-          h('span', { class: 'tipo-texto' }, h('span', { class: 'tipo-nombre' }, t.nombre)),
-          h('span', { class: 'flecha', 'aria-hidden': 'true' }, '›'));
+        return botonMenu(t.nombre, function () { elegir(t); });
+      }));
+      // Las consultas aparecen solo si el script las manda (uno viejo no).
+      $('consultar').hidden = !r.consultas;
+      $('eleccion').classList.toggle('dos-bloques', !!r.consultas);
+      $('consultas').replaceChildren.apply($('consultas'), CONSULTAS.map(function (c) {
+        return botonMenu(c.nombre, function () { consultar(c); });
       }));
     })
     .catch(function (e) {
@@ -939,9 +986,18 @@ $('formulario').addEventListener('click', function (e) {
   if (!ocupado && e.target.closest('.chip, .paso')) $('estado').textContent = '';
 });
 
+function botonMenu(nombre, alTocar) {
+  return h('button', { type: 'button', class: 'tipo', onclick: alTocar },
+    h('span', { class: 'tipo-texto' }, h('span', { class: 'tipo-nombre' }, nombre)),
+    h('span', { class: 'flecha', 'aria-hidden': 'true' }, '›'));
+}
+
 function menu() {
   tipo = '';
+  consulta = '';
   $('eleccion').hidden = false; $('elegido').hidden = true; $('formulario').hidden = true; $('pie').hidden = true;
+  $('consulta').hidden = true;
+  $('consulta').replaceChildren();
   armadas = [];
   $('formulario').replaceChildren();
   $('formulario').className = '';
@@ -955,6 +1011,8 @@ function elegir(t, mismoBoton) {
   codigo = nuevoCodigo();
   if (!mismoBoton) $('tipoTitulo').textContent = t.codigo === 'cobro' ? 'Venta' : t.nombre;
   $('tipoIntro').textContent = TIPOS[tipo].intro;
+  consulta = '';
+  $('consulta').hidden = true;
   $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = false; $('pie').hidden = false;
   armar();
   aviso('');
@@ -1037,6 +1095,178 @@ function liberar() {
   $('guardar').disabled = false;
   $('volver').disabled = false;
   $('guardar').textContent = 'Guardar';
+}
+
+// ---------- Consultas ----------
+// Lo del mes en curso, que manda el script junto con las listas. Cada botón muestra su lista en cards, con un
+// resumen arriba; Venta muestra también los cobros del mes. Se ve al instante con lo que ya había y se rearma
+// cuando llegan los datos al día.
+
+const CONSULTAS = [
+  { codigo: 'venta', nombre: 'Venta' },
+  { codigo: 'gasto', nombre: 'Gasto' },
+  { codigo: 'cuenta', nombre: 'Cuenta' },
+];
+let consulta = '';
+let verCobros = false;
+
+function r2(n) { return Math.round((n || 0) * 100) / 100; }
+function sumar(l, f) { return r2(l.reduce(function (s, x) { return s + (Number(f(x)) || 0); }, 0)); }
+
+// "2026-11" -> "noviembre de 2026".
+function nombreMes(mes) {
+  const p = String(mes || '').split('-').map(Number);
+  if (p.length !== 2 || !p[0] || !p[1]) return 'este mes';
+  return new Date(p[0], p[1] - 1, 1).toLocaleDateString('es-AR', { month: 'long', year: 'numeric' });
+}
+
+function consultar(c) {
+  consulta = c.codigo;
+  verCobros = false;
+  $('tipoTitulo').textContent = c.nombre;
+  $('eleccion').hidden = true; $('elegido').hidden = false; $('formulario').hidden = true; $('pie').hidden = true;
+  $('consulta').hidden = false;
+  aviso('');
+  mostrarConsulta();
+  window.scrollTo(0, 0);
+  cargarListas(true).then(function () { if (consulta === c.codigo) mostrarConsulta(); });
+}
+
+// A la derecha en la computadora (arriba en el celular): qué se ve y el resumen. A la izquierda, las cards.
+function mostrarConsulta() {
+  const C = (D && D.consultas) || {};
+  const mes = nombreMes(C.mes);
+  let vista;
+  if (consulta === 'venta') {
+    vista = verCobros ? vistaCobros(C.cobros || [], mes) : vistaVentas(C.ventas || [], mes);
+    const que = chips('que', 'Qué ves', ['Ventas', 'Cobros'], {
+      inicial: verCobros ? 'Cobros' : 'Ventas',
+      alCambiar: function (op) { verCobros = op === 'Cobros'; mostrarConsulta(); },
+    });
+    vista.lado.unshift(h('section', { class: 'tarjeta' }, que.nodo));
+  } else if (consulta === 'gasto') {
+    vista = vistaGastos(C.gastos || [], mes);
+  } else {
+    vista = vistaCuentas(C.cuentas || [], mes);
+  }
+  $('tipoIntro').textContent = vista.intro;
+  $('consulta').replaceChildren(h('div', { class: 'consulta-cols' },
+    h('div', { class: 'lado' }, vista.lado),
+    h('div', { class: 'principal' }, vista.items.length
+      ? h('div', { class: 'items' }, vista.items)
+      : h('section', { class: 'tarjeta' }, h('p', { class: 'vacio' }, vista.vacio)))));
+}
+
+// datos: [[etiqueta, valor]].
+function resumen(datos) {
+  return h('section', { class: 'tarjeta' }, h('div', { class: 'resumen' }, datos.map(function (d) {
+    return h('div', { class: 'dato' }, h('span', { class: 'dato-etq' }, d[0]), h('span', { class: 'dato-valor' }, d[1]));
+  })));
+}
+
+// Una card: { titulo, sub, monto, cuerpo, notas, etiquetas: [[texto, clase]] }.
+function card(o) {
+  const etiquetas = (o.etiquetas || []).filter(Boolean);
+  return h('article', { class: 'item' },
+    h('div', { class: 'item-cab' }, h('span', { class: 'item-titulo' }, o.titulo), h('span', { class: 'item-monto' }, pesos(r2(o.monto)))),
+    o.sub ? h('p', { class: 'item-sub' }, o.sub) : null,
+    o.cuerpo || null,
+    o.notas ? h('p', { class: 'item-notas' }, 'Notas: ' + o.notas) : null,
+    etiquetas.length ? h('div', { class: 'etiquetas' }, etiquetas.map(function (e) {
+      return h('span', { class: 'etiqueta' + (e[1] ? ' ' + e[1] : '') }, e[0]);
+    })) : null);
+}
+function juntar(l) { return l.filter(Boolean).join(' · '); }
+
+function vistaVentas(l, mes) {
+  const conGanancia = l.filter(function (v) { return typeof v.ganancia === 'number'; });
+  const datos = [['Ventas', String(l.length)], ['Neto', pesos(sumar(l, function (v) { return v.neto; }))]];
+  if (conGanancia.length) datos.push(['Ganancia', pesos(sumar(conGanancia, function (v) { return v.ganancia; }))]);
+  datos.push(['Falta cobrar', pesos(sumar(l, function (v) { return v.saldo > 0.005 ? v.saldo : 0; }))]);
+  return {
+    intro: 'Las ventas de ' + mes + ', de la más nueva a la más vieja. El monto de cada una es el neto.',
+    vacio: 'No hay ventas cargadas en ' + mes + '.',
+    lado: [resumen(datos)],
+    items: l.map(function (v) {
+      const neto = v.neto || 0, cobrado = v.cobrado || 0;
+      let estado;
+      if (v.saldo > 0.005) estado = [cobrado > 0.005 ? 'Falta ' + pesos(r2(v.saldo)) + ' (cobraste ' + pesos(r2(cobrado)) + ')' : 'Sin cobrar', 'falta'];
+      else if (v.saldada && cobrado < neto - 0.005) estado = ['Saldada: no pagó ' + pesos(r2(neto - cobrado)), 'falta'];
+      else estado = ['Cobrada', 'ok'];
+      const ganancia = typeof v.ganancia === 'number' ? ['Ganancia ' + pesos(r2(v.ganancia)), v.ganancia < 0 ? 'falta' : ''] : null;
+      return card({
+        titulo: 'Venta ' + v.id, monto: neto,
+        sub: juntar([v.fecha, v.canal, v.cliente]),
+        cuerpo: [
+          h('ul', { class: 'item-prod' }, (v.productos || []).map(function (p) {
+            return h('li', {}, (p.q > 1 ? p.q + ' × ' : '') + juntar([p.n, p.d, p.c]));
+          })),
+          v.bruto ? h('p', { class: 'item-sub' }, 'Pagó ' + pesos(r2(v.bruto)) + (v.envio ? ' · envío ' + pesos(r2(v.envio)) : '')) : null,
+        ],
+        notas: v.notas,
+        etiquetas: [estado, ganancia, v.origen ? [v.origen, ''] : null],
+      });
+    }),
+  };
+}
+
+function vistaCobros(l, mes) {
+  return {
+    intro: 'Los cobros de ' + mes + ': lo que te pagaron después de vender (señas y saldos), del más nuevo al más viejo.',
+    vacio: 'No hay cobros cargados en ' + mes + '.',
+    lado: [resumen([['Cobros', String(l.length)], ['Total', pesos(sumar(l, function (c) { return c.monto; }))]])],
+    items: l.map(function (c) {
+      return card({
+        titulo: 'Cobro de la venta ' + c.venta, monto: c.monto,
+        sub: juntar([c.fecha, c.cliente, c.cuenta]),
+        cuerpo: c.detalle ? h('p', { class: 'item-linea' }, c.detalle) : null,
+        notas: c.notas,
+        etiquetas: [c.saldada ? ['Saldó la venta', 'ok'] : null],
+      });
+    }),
+  };
+}
+
+function vistaGastos(l, mes) {
+  return {
+    intro: 'Los gastos de ' + mes + ', del más nuevo al más viejo.',
+    vacio: 'No hay gastos cargados en ' + mes + '.',
+    lado: [resumen([['Gastos', String(l.length)], ['Total', pesos(sumar(l, function (g) { return g.monto; }))]])],
+    items: l.map(function (g) {
+      return card({
+        titulo: g.tipo, monto: g.monto,
+        sub: juntar([g.fecha, g.cuenta]),
+        cuerpo: g.detalle ? h('p', { class: 'item-linea' }, g.detalle) : null,
+        notas: g.notas,
+        etiquetas: [g.venta ? ['Venta ' + g.venta, ''] : null],
+      });
+    }),
+  };
+}
+
+// "Mercado Libre → Mercado Pago", "Aporte a Efectivo", "Retiro de Mercado Pago" o el concepto que carga Claude.
+function tituloCuenta(c) {
+  if (c.concepto) return juntar([c.concepto, c.hacia]);
+  if (c.desde === L.aporte) return 'Aporte a ' + c.hacia;
+  if (c.hacia === L.retiro) return 'Retiro de ' + c.desde;
+  return c.desde + ' → ' + c.hacia;
+}
+
+function vistaCuentas(l, mes) {
+  const aportes = l.filter(function (c) { return c.desde === L.aporte && !c.concepto; });
+  const retiros = l.filter(function (c) { return c.hacia === L.retiro; });
+  return {
+    intro: 'Los movimientos de Cuentas de ' + mes + ' (pases, aportes y retiros), del más nuevo al más viejo.',
+    vacio: 'No hay movimientos de Cuentas en ' + mes + '.',
+    lado: [resumen([
+      ['Movimientos', String(l.length)],
+      ['Aportes', pesos(sumar(aportes, function (c) { return c.monto; }))],
+      ['Retiros', pesos(sumar(retiros, function (c) { return c.monto; }))],
+    ])],
+    items: l.map(function (c) {
+      return card({ titulo: tituloCuenta(c), monto: c.monto, sub: c.fecha, notas: c.notas });
+    }),
+  };
 }
 </script>
 </body>
