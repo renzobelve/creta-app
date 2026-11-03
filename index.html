@@ -134,9 +134,10 @@
   .titulo-segundo { margin-top: 26px; }
   #filtroMes { margin-top: 14px; }
   #filtroMes .campo { margin-bottom: 0; }
-  .resumen { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; }
+  /* Todos los datos en una línea: la cantidad, angosta, y los montos repartidos en el resto. */
+  .resumen { display: grid; grid-auto-flow: column; grid-template-columns: auto; grid-auto-columns: minmax(0, 1fr); gap: 12px; }
   .dato-etq { display: block; font-size: 13px; color: var(--gris); }
-  .dato-valor { display: block; font-weight: 700; font-size: 18px; overflow-wrap: anywhere; }
+  .dato-valor { display: block; font-weight: 700; font-size: 17px; overflow-wrap: anywhere; }
   .items { display: flex; flex-direction: column; gap: 10px; }
   .item { background: #fff; border: 1px solid var(--linea); border-radius: 14px; padding: 12px 14px; min-width: 0; }
   .item-cab { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
@@ -1219,8 +1220,9 @@ function mostrarConsulta() {
 
 // datos: [[etiqueta, valor]].
 function resumen(datos) {
+  // Un monto que no entra en su columna se corta después del signo, no en el medio del número.
   return h('section', { class: 'tarjeta' }, h('div', { class: 'resumen' }, datos.map(function (d) {
-    return h('div', { class: 'dato' }, h('span', { class: 'dato-etq' }, d[0]), h('span', { class: 'dato-valor' }, d[1]));
+    return h('div', { class: 'dato' }, h('span', { class: 'dato-etq' }, d[0]), h('span', { class: 'dato-valor' }, d[1].replace(' ', ' ')));
   })));
 }
 
