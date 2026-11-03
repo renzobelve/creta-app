@@ -1239,10 +1239,11 @@ function card(o) {
 function juntar(l) { return l.filter(Boolean).join(' · '); }
 
 function vistaVentas(l, mes) {
-  const conGanancia = l.filter(function (v) { return typeof v.ganancia === 'number'; });
-  const datos = [['Ventas', String(l.length)], ['Neto', pesos(sumar(l, function (v) { return v.neto; }))]];
-  if (conGanancia.length) datos.push(['Ganancia', pesos(sumar(conGanancia, function (v) { return v.ganancia; }))]);
-  datos.push(['Falta cobrar', pesos(sumar(l, function (v) { return v.saldo > 0.005 ? v.saldo : 0; }))]);
+  const datos = [
+    ['Ventas', String(l.length)],
+    ['Neto', pesos(sumar(l, function (v) { return v.neto; }))],
+    ['Falta cobrar', pesos(sumar(l, function (v) { return v.saldo > 0.005 ? v.saldo : 0; }))],
+  ];
   return {
     intro: 'Las ventas de ' + mes + ', de la más nueva a la más vieja. El monto de cada una es el neto.',
     vacio: 'No hay ventas cargadas en ' + mes + '.',
@@ -1253,7 +1254,6 @@ function vistaVentas(l, mes) {
       if (v.saldo > 0.005) estado = [cobrado > 0.005 ? 'Falta ' + pesos(r2(v.saldo)) + ' (cobraste ' + pesos(r2(cobrado)) + ')' : 'Sin cobrar', 'falta'];
       else if (v.saldada && cobrado < neto - 0.005) estado = ['Saldada: no pagó ' + pesos(r2(neto - cobrado)), 'falta'];
       else estado = ['Cobrada', 'ok'];
-      const ganancia = typeof v.ganancia === 'number' ? ['Ganancia ' + pesos(r2(v.ganancia)), v.ganancia < 0 ? 'falta' : ''] : null;
       return card({
         titulo: 'Venta ' + v.id, monto: neto,
         sub: juntar([v.fecha, v.canal, v.cliente]),
@@ -1263,8 +1263,7 @@ function vistaVentas(l, mes) {
           })),
           v.bruto ? h('p', { class: 'item-sub' }, 'Pagó ' + pesos(r2(v.bruto)) + (v.envio ? ' · envío ' + pesos(r2(v.envio)) : '')) : null,
         ],
-        notas: v.notas,
-        etiquetas: [estado, ganancia],
+        etiquetas: [estado],
       });
     }),
   };
